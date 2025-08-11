@@ -15,6 +15,7 @@ dist/
 # Logs
 *.log
 logs/
+daemon.log
 
 # Data files
 *.json

@@ -14,17 +14,22 @@ from pathlib import Path
 # Get the path to the script's directory
 SCRIPT_DIR = Path(__file__).parent
 
-# Force development directory when raycast_focus_tracker folder structure exists
-project_root = SCRIPT_DIR.parent
-if (project_root / "setup.py").exists() and (project_root / "data").exists():
-    # Development mode: use local data directory
-    DATA_DIR = project_root / "data"
-elif SCRIPT_DIR.name == "raycast_focus_tracker" and (project_root / "setup.py").exists():
-    # Editable install with project structure
-    DATA_DIR = project_root / "data"
-else:
+# Always prioritize the user's home directory if it has data
+home_data_dir = Path.home() / ".raycast-focus-tracker" / "data"
+project_data_dir = SCRIPT_DIR.parent / "data"
+
+if home_data_dir.exists() and any(home_data_dir.glob("focus.*.json")):
+    # Use home directory if it has focus data
+    DATA_DIR = home_data_dir
+elif project_data_dir.exists() and any(project_data_dir.glob("focus.*.json")):
+    # Fall back to project directory if it has focus data
+    DATA_DIR = project_data_dir
+elif "site-packages" in str(SCRIPT_DIR):
     # Installed mode: use user's home directory  
-    DATA_DIR = Path.home() / ".raycast-focus-tracker" / "data"
+    DATA_DIR = home_data_dir
+else:
+    # Development mode: use local data directory
+    DATA_DIR = project_data_dir
 
 # Ensure the data directory exists
 DATA_DIR.mkdir(parents=True, exist_ok=True)

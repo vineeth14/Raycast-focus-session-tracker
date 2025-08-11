@@ -265,18 +265,6 @@ def main():
     import sys
     import signal
     
-    app = None
-    
-    def signal_handler(sig, frame):
-        """Handle Ctrl+C by cleaning up background processes."""
-        if app:
-            print("\nReceived interrupt, cleaning up...")
-            app.quit_application(None)
-        sys.exit(0)
-    
-    # Set up signal handler for Ctrl+C
-    signal.signal(signal.SIGINT, signal_handler)
-    
     # Check if another menuBar instance is already running
     current_pid = os.getpid()
     result = subprocess.run(['/usr/bin/pgrep', '-f', 'menuBar.py'], 
@@ -285,12 +273,27 @@ def main():
         existing_pids = [pid.strip() for pid in result.stdout.strip().split('\n') 
                        if pid.strip() and pid.strip() != str(current_pid)]
         if existing_pids:
-            print(f"Raycast Focus Tracker menu bar is already running (PIDs: {', '.join(existing_pids)})")
+            print(f"Raycast Focus Tracker is already running (PIDs: {', '.join(existing_pids)})")
             print("Use 'raycast-tracker-stop' to stop existing instances first.")
             sys.exit(1)
     
     print("Starting Raycast Focus Tracker...")
     print("Use 'Quit' from menu bar or Ctrl+C to stop")
+    
+    # Set up signal handlers
+    def signal_handler(sig, frame):
+        """Handle Ctrl+C by cleaning up background processes."""
+        print("\nReceived interrupt, cleaning up...")
+        try:
+            subprocess.run(['/usr/bin/pkill', '-f', 'focus-tracker.sh'], capture_output=True)
+            subprocess.run(['/usr/bin/pkill', '-f', 'log stream.*com.raycast.macos'], capture_output=True)
+            print("Stopped background tracker")
+        except Exception as e:
+            print(f"Error stopping background tracker: {e}")
+        sys.exit(0)
+    
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
     
     try:
         app = FocusApp()

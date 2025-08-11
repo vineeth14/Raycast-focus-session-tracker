@@ -13,10 +13,15 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'raycast-tracker=raycast_focus_tracker.menuBar:main',
+            'raycast-tracker=raycast_focus_tracker.daemon_launcher:main',
+            'raycast-tracker-stop=raycast_focus_tracker.stop_tracker:main',
         ],
     },
-    scripts=['raycast_focus_tracker/focus-tracker.sh'],
+    scripts=[
+        'raycast_focus_tracker/focus-tracker.sh', 
+        'raycast_focus_tracker/stop-tracker.sh',
+        'raycast_focus_tracker/start-daemon.sh'
+    ],
     include_package_data=True,
     package_data={
         'raycast_focus_tracker': ['*.sh'],
