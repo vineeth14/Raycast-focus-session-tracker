@@ -14,6 +14,11 @@ pip install -e .
 
 ## Usage
 
+**Setup:**
+1. Open Raycast settings (Cmd+,)
+2. Go to Advanced tab
+3. Check "Open Raycast in developer mode"
+
 **Start:**
 ```bash
 raycast-tracker
