@@ -96,6 +96,35 @@ def initialize_day_data(data, date_key):
             "active_sessions": {}
         }
 
+def clean_stale_active_sessions(data):
+    """Remove stale active sessions that have corresponding completed items.
+    
+    Args:
+        data (dict): Main data structure to clean
+    """
+    for date_key, day_data in data.items():
+        if 'active_sessions' not in day_data or 'items' not in day_data:
+            continue
+        
+        # Get all completed session (goal, start_time) pairs
+        completed_sessions = {
+            (item['goal'], item['start_time']) 
+            for item in day_data['items']
+            if item.get('state') == 'completed'
+        }
+        
+        # Remove active sessions that are already completed
+        active_sessions = day_data['active_sessions']
+        stale_keys = []
+        
+        for session_key, session in active_sessions.items():
+            session_pair = (session['goal'], session['start_time'])
+            if session_pair in completed_sessions:
+                stale_keys.append(session_key)
+        
+        for key in stale_keys:
+            del active_sessions[key]
+
 
 def handle_session_start(line, data, current_session_data):
     """Handle 'Start focus session' log line.
@@ -150,8 +179,11 @@ def add_to_active_sessions(data, current_session_data):
     if _session_already_exists(data[date_key], goal, start_time):
         return
     
-    # Add to active sessions
-    data[date_key]['active_sessions'][goal] = {
+    # Use goal + start_time as unique key for active sessions
+    session_key = f"{goal}_{start_time}"
+    
+    # Add to active sessions with unique key
+    data[date_key]['active_sessions'][session_key] = {
         'goal': goal,
         'start_time': start_time,
         'state': 'started'
@@ -250,12 +282,8 @@ def _session_already_exists(day_data, goal, start_time):
     """Check if session already exists in active sessions (only block active duplicates)."""
     # Only check active sessions - don't block re-processing completed sessions
     # This allows re-parsing to work correctly
-    if goal in day_data.get('active_sessions', {}):
-        existing_start = day_data['active_sessions'][goal].get('start_time')
-        if existing_start == start_time:
-            return True
-    
-    return False
+    session_key = f"{goal}_{start_time}"
+    return session_key in day_data.get('active_sessions', {})
 
 def _session_end_already_processed(day_data, goal, timestamp):
     """Check if session end is already processed."""
@@ -271,14 +299,23 @@ def _find_active_session(day_data, recent_goal):
     """Find and remove active session to complete."""
     active_sessions = day_data.get('active_sessions', {})
     
-    if recent_goal and recent_goal in active_sessions:
-        session = active_sessions.pop(recent_goal)
-        return session, recent_goal
+    if not active_sessions:
+        return None, None
+    
+    # Look for active session matching the goal
+    matching_keys = [key for key in active_sessions.keys() 
+                    if active_sessions[key]['goal'] == recent_goal]
+    
+    if matching_keys:
+        # Take the most recent matching session (last one)
+        session_key = matching_keys[-1]
+        session = active_sessions.pop(session_key)
+        return session, session_key
     elif active_sessions:
-        # Fallback: take most recent active session
-        goal_key = list(active_sessions.keys())[-1]
-        session = active_sessions.pop(goal_key)
-        return session, goal_key
+        # Fallback: take most recent active session of any goal
+        session_key = list(active_sessions.keys())[-1]
+        session = active_sessions.pop(session_key)
+        return session, session_key
     
     return None, None
 
@@ -378,6 +415,10 @@ def parse_log_file(log_file_path, json_output_path):
     print(f"Parsing {log_file_path} -> {json_output_path}")
     
     data = load_or_create_json(json_output_path)
+    
+    # Clean up stale active sessions from previous parsing
+    clean_stale_active_sessions(data)
+    
     current_session_data = {}
     
     try:

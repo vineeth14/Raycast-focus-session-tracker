@@ -20,6 +20,7 @@ from .data_access import (
     get_longest_streak,
     get_today_by_goal,
     get_today_minutes,
+    DATA_DIR,
 )
 from .streak_calculation import update_streaks
 
@@ -28,26 +29,20 @@ class FocusApp(rumps.App):
     def __init__(self):
         super().__init__("🎯")
         
-        # --- Dynamic Directory Configuration ---
-        # Match the focus-tracker.sh logic exactly
-        SCRIPT_DIR = Path(__file__).parent
-
-        # Check if running in development environment (by checking for setup.py)
-        if (SCRIPT_DIR.parent / "setup.py").exists():
-            # Development mode: use local directories relative to the script
-            BASE_DIR = SCRIPT_DIR.parent
-            self.data_dir = BASE_DIR / "data"
-        else:
-            # Installed mode: use a hidden directory in the user's home folder
-            BASE_DIR = Path.home() / ".raycast-focus-tracker"
-            self.data_dir = BASE_DIR / "data"
-
+        # --- Use same directory as data_access.py ---
+        self.script_dir = Path(__file__).parent
+        self.data_dir = Path(DATA_DIR)
+        
         # Ensure the data directory exists
         self.data_dir.mkdir(parents=True, exist_ok=True)
         
         self._start_background_tracker()
         self._parse_latest_logs()  # Parse logs before building menu
         self.create_menu()
+        
+        # Auto-refresh every 5 seconds
+        self._auto_refresh_timer = rumps.Timer(self._auto_refresh, 5)
+        self._auto_refresh_timer.start()
 
     def create_menu(self):
         self.menu.clear()
@@ -129,14 +124,25 @@ class FocusApp(rumps.App):
         """Parse any new log data to JSON files."""
         try:
             today = datetime.now().strftime("%Y-%m-%d")
-            log_file = self.data_dir.parent / "logs" / f"focus.{today}.log"
-            json_file = self.data_dir / f"focus.{today}.json"
             
-            if log_file.exists():
+            # Look for logs in project directory first, then home directory
+            project_log_dir = self.script_dir.parent / "logs"
+            home_log_dir = Path.home() / ".raycast-focus-tracker" / "logs"
+            
+            log_file = None
+            if (project_log_dir / f"focus.{today}.log").exists():
+                log_file = project_log_dir / f"focus.{today}.log"
+            elif (home_log_dir / f"focus.{today}.log").exists():
+                log_file = home_log_dir / f"focus.{today}.log"
+            
+            if log_file:
+                json_file = self.data_dir / f"focus.{today}.json"
                 # Import and run log parser
                 from .log_to_json import parse_log_file
                 parse_log_file(str(log_file), str(json_file))
                 print(f"Parsed {log_file} -> {json_file}")
+            else:
+                print(f"No log file found for {today}")
         except Exception as e:
             print(f"Error parsing logs: {e}")
     
@@ -206,9 +212,19 @@ class FocusApp(rumps.App):
         self._parse_latest_logs()
         self._update_menu_data()
     
+    def _auto_refresh(self, _):
+        """Auto-refresh menu data every 5 seconds."""
+        print(f"Auto-refresh triggered at {datetime.now()}")
+        self._parse_latest_logs()
+        self._update_menu_data()
+    
     def quit_application(self, _):
         """Override rumps quit to stop background tracker."""
         try:
+            # Stop auto-refresh timer
+            if hasattr(self, '_auto_refresh_timer'):
+                self._auto_refresh_timer.stop()
+            
             # Stop background tracker processes
             subprocess.run(['/usr/bin/pkill', '-f', 'focus-tracker.sh'], 
                          capture_output=True)
