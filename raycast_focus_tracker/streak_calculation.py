@@ -50,11 +50,24 @@ def update_streaks(daily_data, streaks_path="data/streaks.json"):
     streaks = load_streaks(streaks_path)
     
     current_streak = _calculate_current_streak(daily_data)
+    previous_current = streaks.get("current_streak", 0)
     
+    # Update current_streak in memory
     streaks["current_streak"] = current_streak
-    streaks["longest_streak"] = max(streaks["longest_streak"], current_streak)
     
-    save_streaks(streaks, streaks_path)
+    # Only save to file if current_streak actually changed or longest_streak improved
+    should_save = False
+    if current_streak != previous_current:
+        should_save = True
+        
+    # Only update longest_streak if this is a NEW record
+    if current_streak > streaks["longest_streak"]:
+        streaks["longest_streak"] = current_streak
+        should_save = True
+        
+    if should_save:
+        save_streaks(streaks, streaks_path)
+    
     return streaks
 
 

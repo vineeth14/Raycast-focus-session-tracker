@@ -6,10 +6,28 @@ applications and other consumers. Handles file I/O and error cases gracefully.
 """
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
-DATA_DIR = Path(__file__).parent / "data"
+# --- Dynamic Directory Configuration ---
+# Get the path to the script's directory
+SCRIPT_DIR = Path(__file__).parent
+
+# Force development directory when raycast_focus_tracker folder structure exists
+project_root = SCRIPT_DIR.parent
+if (project_root / "setup.py").exists() and (project_root / "data").exists():
+    # Development mode: use local data directory
+    DATA_DIR = project_root / "data"
+elif SCRIPT_DIR.name == "raycast_focus_tracker" and (project_root / "setup.py").exists():
+    # Editable install with project structure
+    DATA_DIR = project_root / "data"
+else:
+    # Installed mode: use user's home directory  
+    DATA_DIR = Path.home() / ".raycast-focus-tracker" / "data"
+
+# Ensure the data directory exists
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def get_today_minutes():

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Build/Install artifacts  
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+*.log
+logs/
+
+# Data files
+*.json
+*.html
+
+# Virtual environment
+.venv/
+venv/
+
+# IDE/Editor
+.vscode/
+.idea/
+
+# Claude
+.claude/
+CLAUDE.md
+
+# macOS
+.DS_Store

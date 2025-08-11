@@ -68,12 +68,15 @@ def calculate_duration(start_time, end_time):
         end_time (str): End timestamp
         
     Returns:
-        int: Duration in minutes, 0 if calculation fails
+        int: Duration in minutes, minimum 1 for completed sessions
     """
     try:
         start = datetime.fromisoformat(start_time.split('.')[0])
         end = datetime.fromisoformat(end_time.split('.')[0])
-        return int((end - start).total_seconds() / 60)
+        duration_seconds = (end - start).total_seconds()
+        duration_minutes = int(duration_seconds / 60)
+        # Return at least 1 minute for any completed session to ensure it counts
+        return max(1, duration_minutes) if duration_seconds > 0 else 0
     except Exception:
         return 0
 
@@ -128,7 +131,6 @@ def extract_goal(line, current_session_data):
         current_session_data['goal'] = goal
 
 
-
 def add_to_active_sessions(data, current_session_data):
     """Add session to active_sessions once we have goal.
     
@@ -155,7 +157,6 @@ def add_to_active_sessions(data, current_session_data):
         'state': 'started'
     }
 
-
 def handle_session_end(line, data, current_session_data):
     """Handle 'Complete focus session' or 'Cancel focus session' lines.
     
@@ -173,6 +174,8 @@ def handle_session_end(line, data, current_session_data):
     
     recent_goal = current_session_data.get('goal')
     
+    # Debug print
+    
     # Skip if session already completed
     if _session_end_already_processed(data[date_key], recent_goal, timestamp):
         return
@@ -186,7 +189,10 @@ def handle_session_end(line, data, current_session_data):
         _complete_session(session_to_complete, timestamp, line)
         data[date_key]['items'].append(session_to_complete)
         current_session_data['last_completed_goal'] = goal_key
-
+        # Clear session state after completion to prepare for next session
+        current_session_data.clear()
+    else:
+        pass  # No active session found
 
 def handle_activity_summary_line(line, data, current_session_data):
     """Handle activity summary lines (Start date, Pauses Count, etc.).
@@ -204,11 +210,18 @@ def handle_activity_summary_line(line, data, current_session_data):
         "Snooze Events Count:": lambda l, d, c: _handle_count_stat(l, d, c, 'snoozes')
     }
     
+    matched = False
     for key, handler in summary_handlers.items():
         if key in line:
             handler(line, data, current_session_data)
+            matched = True
             break
-
+    
+    # Check if we've finished the activity summary (no more matching lines)
+    if not matched and not any(key in line for key in summary_handlers.keys()) and line.strip():
+        # If we encounter a non-summary line, exit activity summary mode
+        if 'in_activity_summary' in current_session_data:
+            del current_session_data['in_activity_summary']
 
 def update_last_session_stat(data, current_session_data, stat_name, value):
     """Update the most recent session with activity summary stats.
@@ -234,14 +247,9 @@ def update_last_session_stat(data, current_session_data, stat_name, value):
 # Helper functions for session processing
 
 def _session_already_exists(day_data, goal, start_time):
-    """Check if session already exists in completed items or active sessions."""
-    # Check completed items
-    for item in day_data.get('items', []):
-        if (item.get('goal') == goal and 
-            item.get('start_time') == start_time):
-            return True
-    
-    # Check active sessions
+    """Check if session already exists in active sessions (only block active duplicates)."""
+    # Only check active sessions - don't block re-processing completed sessions
+    # This allows re-parsing to work correctly
     if goal in day_data.get('active_sessions', {}):
         existing_start = day_data['active_sessions'][goal].get('start_time')
         if existing_start == start_time:
@@ -249,16 +257,15 @@ def _session_already_exists(day_data, goal, start_time):
     
     return False
 
-
 def _session_end_already_processed(day_data, goal, timestamp):
     """Check if session end is already processed."""
     for item in day_data.get('items', []):
-        if (item.get('goal') == goal and 
+        if (
+            item.get('goal') == goal and 
             item.get('end_time') == timestamp and
             item.get('state') == 'completed'):
             return True
     return False
-
 
 def _find_active_session(day_data, recent_goal):
     """Find and remove active session to complete."""
@@ -275,7 +282,6 @@ def _find_active_session(day_data, recent_goal):
     
     return None, None
 
-
 def _complete_session(session, timestamp, line):
     """Complete a session with end details."""
     if session.get('state') != 'completed':
@@ -289,20 +295,17 @@ def _complete_session(session, timestamp, line):
             'state': 'completed'
         })
 
-
 def _handle_start_date(line, data, current_session_data):
     """Handle start date from activity summary."""
     match = re.search(r'Start date: (.+)', line)
     if match:
         current_session_data['activity_start_date'] = match.group(1).strip()
 
-
 def _handle_duration(line, data, current_session_data):
     """Handle duration from activity summary."""
     if current_session_data.get('in_activity_summary'):
         duration_text = line.split("Duration:")[1].strip()
         current_session_data['activity_duration'] = duration_text
-
 
 def _handle_count_stat(line, data, current_session_data, stat_name):
     """Handle count statistics from activity summary."""
@@ -313,7 +316,6 @@ def _handle_count_stat(line, data, current_session_data, stat_name):
     match = re.search(pattern, line)
     if match:
         update_last_session_stat(data, current_session_data, stat_name, int(match.group(1)))
-
 
 def recalculate_daily_totals(data):
     """Recalculate total_time_minutes and time_per_goal for each day.
@@ -339,7 +341,6 @@ def recalculate_daily_totals(data):
         data[date_key]['total_time_minutes'] = total_time
         data[date_key]['time_per_goal'] = time_per_goal
 
-
 def _should_count_session(item):
     """Check if session should be counted in daily totals.
     
@@ -349,9 +350,9 @@ def _should_count_session(item):
     Returns:
         bool: True if session should be counted
     """
-    return (item.get('state') == 'completed' and 
-            not item.get('cancelled', False))
-
+    return (
+        item.get('state') == 'completed' and 
+        not item.get('cancelled', False))
 
 def save_json(data, json_path):
     """Save data to JSON file with pretty formatting.
@@ -363,7 +364,6 @@ def save_json(data, json_path):
     Path(json_path).parent.mkdir(parents=True, exist_ok=True)
     with open(json_path, 'w') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-
 
 def parse_log_file(log_file_path, json_output_path):
     """Main function to parse log file and convert to JSON structure.
@@ -386,6 +386,7 @@ def parse_log_file(log_file_path, json_output_path):
                 line = line.strip()
                 if not line:
                     continue
+                
                 
                 try:
                     _process_log_line(line, data, current_session_data)
@@ -433,11 +434,13 @@ def _process_log_line(line, data, current_session_data):
         return
     
     # Process other line types
+    matched = False
     for key, handler in line_handlers.items():
         if key in line:
             handler(line, data, current_session_data)
+            matched = True
             break
-
+    
 
 def _handle_goal_line(line, data, current_session_data):
     """Handle goal extraction and session activation."""
@@ -445,14 +448,13 @@ def _handle_goal_line(line, data, current_session_data):
     if 'start_time' in current_session_data:
         add_to_active_sessions(data, current_session_data)
 
-
 def _handle_activity_summary_start(line, data, current_session_data):
     """Mark start of activity summary section."""
     current_session_data['in_activity_summary'] = True
 
-
 def _handle_form_state_reset(line, data, current_session_data):
-    """Reset session tracking data."""
+    """Reset session tracking data completely to prepare for new session."""
+    # Clear all session state - form reset indicates we're starting fresh
     current_session_data.clear()
 
 
