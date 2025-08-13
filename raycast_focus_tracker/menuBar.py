@@ -157,9 +157,14 @@ class FocusApp(rumps.App):
 
     def _update_submenu(self, menu_title, items):
         """Helper to update a submenu with new items."""
-        self.menu[menu_title].clear()
-        for item in items:
-            self.menu[menu_title].add(item)
+        try:
+            self.menu[menu_title].clear()
+            for item in items:
+                self.menu[menu_title].add(item)
+        except Exception as e:
+            print(f"Error updating submenu {menu_title}: {e}")
+            # Fallback: rebuild entire menu
+            self.create_menu()
 
     def _create_heatmap(self):
         """Create GitHub-style heatmap of focus sessions."""
@@ -214,9 +219,17 @@ class FocusApp(rumps.App):
     
     def _auto_refresh(self, _):
         """Auto-refresh menu data every 5 seconds."""
-        print(f"Auto-refresh triggered at {datetime.now()}")
-        self._parse_latest_logs()
-        self._update_menu_data()
+        try:
+            print(f"Auto-refresh triggered at {datetime.now()}")
+            self._parse_latest_logs()
+            self._update_menu_data()
+        except Exception as e:
+            print(f"Error during auto-refresh: {e}")
+            # Fallback: rebuild menu
+            try:
+                self.create_menu()
+            except Exception as e2:
+                print(f"Error rebuilding menu: {e2}")
     
     def quit_application(self, _):
         """Override rumps quit to stop background tracker."""

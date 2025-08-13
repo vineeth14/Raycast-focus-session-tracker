@@ -7,8 +7,8 @@ Monitor your focus patterns, build streaks, and visualize your productivity over
 ## Installation
 
 ```bash
-git clone <repository-url>
-cd raycast-tracker
+git clone https://github.com/vineeth14/Raycast-focus-session-tracker.git
+cd Raycast-focus-session-tracker
 pip install -e .
 ```
 

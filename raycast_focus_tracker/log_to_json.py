@@ -80,6 +80,37 @@ def calculate_duration(start_time, end_time):
     except Exception:
         return 0
 
+def parse_activity_duration(duration_text):
+    """Parse activity summary duration text to minutes.
+    
+    Args:
+        duration_text (str): Duration from activity summary (e.g., "1 hour 22 minutes", "45 minutes")
+        
+    Returns:
+        int: Duration in minutes, or None if parsing fails
+    """
+    try:
+        if not duration_text or duration_text.strip() == "":
+            return None
+            
+        duration_text = duration_text.strip().lower()
+        total_minutes = 0
+        
+        # Parse hours
+        import re
+        hour_match = re.search(r'(\d+)\s*hour', duration_text)
+        if hour_match:
+            total_minutes += int(hour_match.group(1)) * 60
+        
+        # Parse minutes
+        minute_match = re.search(r'(\d+)\s*minute', duration_text)
+        if minute_match:
+            total_minutes += int(minute_match.group(1))
+        
+        return total_minutes if total_minutes > 0 else None
+    except Exception:
+        return None
+
 
 def initialize_day_data(data, date_key):
     """Initialize day structure if it doesn't exist.
@@ -102,13 +133,14 @@ def clean_stale_active_sessions(data):
     Args:
         data (dict): Main data structure to clean
     """
+    cleaned_count = 0
     for date_key, day_data in data.items():
         if 'active_sessions' not in day_data or 'items' not in day_data:
             continue
         
-        # Get all completed session (goal, start_time) pairs
-        completed_sessions = {
-            (item['goal'], item['start_time']) 
+        # Get all completed session start_times
+        completed_start_times = {
+            item['start_time'] 
             for item in day_data['items']
             if item.get('state') == 'completed'
         }
@@ -118,12 +150,15 @@ def clean_stale_active_sessions(data):
         stale_keys = []
         
         for session_key, session in active_sessions.items():
-            session_pair = (session['goal'], session['start_time'])
-            if session_pair in completed_sessions:
+            if session['start_time'] in completed_start_times:
                 stale_keys.append(session_key)
         
         for key in stale_keys:
             del active_sessions[key]
+            cleaned_count += 1
+    
+    if cleaned_count > 0:
+        print(f"Cleaned {cleaned_count} stale active sessions")
 
 
 def handle_session_start(line, data, current_session_data):
@@ -220,9 +255,10 @@ def handle_session_end(line, data, current_session_data):
     if session_to_complete:
         _complete_session(session_to_complete, timestamp, line)
         data[date_key]['items'].append(session_to_complete)
-        current_session_data['last_completed_goal'] = goal_key
-        # Clear session state after completion to prepare for next session
+        # Set last completed goal for activity summary processing (preserve goal from completed session)
+        completed_goal = session_to_complete.get('goal')
         current_session_data.clear()
+        current_session_data['last_completed_goal'] = completed_goal
     else:
         pass  # No active session found
 
@@ -236,6 +272,7 @@ def handle_activity_summary_line(line, data, current_session_data):
     """
     summary_handlers = {
         "Start date:": _handle_start_date,
+        "Source:": lambda l, d, c: None,  # Ignore source lines
         "Duration:": _handle_duration,
         "Pauses Count:": lambda l, d, c: _handle_count_stat(l, d, c, 'pauses'),
         "Block Events Count:": lambda l, d, c: _handle_count_stat(l, d, c, 'blocks'),
@@ -274,6 +311,53 @@ def update_last_session_stat(data, current_session_data, stat_name, value):
                 if session.get('goal') == goal:
                     session[stat_name] = value
                     return
+
+def update_last_session_duration(data, current_session_data, activity_minutes):
+    """Update the most recent session with activity summary duration.
+    
+    Args:
+        data (dict): Main data structure
+        current_session_data (dict): Session tracking data
+        activity_minutes (int): Duration from activity summary in minutes
+    """
+    goal = current_session_data.get('last_completed_goal')
+    if not goal:
+        return
+    
+    for date_key in reversed(list(data.keys())):
+        if 'items' in data[date_key]:
+            for session in reversed(data[date_key]['items']):
+                if session.get('goal') == goal:
+                    # Update actual_duration with activity summary duration
+                    session['actual_duration'] = activity_minutes
+                    # Recalculate totals for this date
+                    _recalculate_totals(data, date_key)
+                    return
+
+def _recalculate_totals(data, date_key):
+    """Recalculate total_time_minutes and time_per_goal for a specific date.
+    
+    Args:
+        data (dict): Main data structure
+        date_key (str): Date key to recalculate
+    """
+    if date_key not in data or 'items' not in data[date_key]:
+        return
+    
+    total_time = 0
+    time_per_goal = {}
+    
+    for item in data[date_key]['items']:
+        if _should_count_session(item):
+            duration = item.get('actual_duration', 0)
+            goal = item.get('goal', 'unknown')
+            
+            total_time += duration
+            time_per_goal[goal] = time_per_goal.get(goal, 0) + duration
+    
+    # Update the data structure
+    data[date_key]['total_time_minutes'] = total_time
+    data[date_key]['time_per_goal'] = time_per_goal
 
 
 # Helper functions for session processing
@@ -343,6 +427,11 @@ def _handle_duration(line, data, current_session_data):
     if current_session_data.get('in_activity_summary'):
         duration_text = line.split("Duration:")[1].strip()
         current_session_data['activity_duration'] = duration_text
+        
+        # Parse and apply the duration to the last completed session
+        activity_minutes = parse_activity_duration(duration_text)
+        if activity_minutes is not None:
+            update_last_session_duration(data, current_session_data, activity_minutes)
 
 def _handle_count_stat(line, data, current_session_data, stat_name):
     """Handle count statistics from activity summary."""
@@ -471,6 +560,7 @@ def _process_log_line(line, data, current_session_data):
     
     # Check for activity summary lines first
     if current_session_data.get('in_activity_summary'):
+        print(f"Processing activity line: {line}")
         handle_activity_summary_line(line, data, current_session_data)
         return
     
@@ -495,8 +585,13 @@ def _handle_activity_summary_start(line, data, current_session_data):
 
 def _handle_form_state_reset(line, data, current_session_data):
     """Reset session tracking data completely to prepare for new session."""
+    # Preserve last_completed_goal for activity summary processing
+    last_goal = current_session_data.get('last_completed_goal')
     # Clear all session state - form reset indicates we're starting fresh
     current_session_data.clear()
+    # Restore the last completed goal for activity summary processing
+    if last_goal:
+        current_session_data['last_completed_goal'] = last_goal
 
 
 if __name__ == "__main__":
