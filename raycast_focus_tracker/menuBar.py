@@ -43,6 +43,8 @@ class FocusApp(rumps.App):
         # Auto-refresh every 5 seconds
         self._auto_refresh_timer = rumps.Timer(self._auto_refresh, 5)
         self._auto_refresh_timer.start()
+        print(f"✅ Auto-refresh timer started (5-second interval)")
+        print(f"✅ Menu bar app initialized successfully")
 
     def create_menu(self):
         self.menu.clear()
@@ -62,9 +64,20 @@ class FocusApp(rumps.App):
     def _refresh_data(self):
         """Load all focus data and update streaks."""
         daily_data = {}
-        for focus_file in self.data_dir.glob("focus.*.json"):
-            with open(focus_file, "r") as f:
-                daily_data.update(json.load(f))
+        
+        # Check both home and project directories for focus data
+        search_dirs = [
+            self.data_dir,
+            Path(__file__).parent.parent / "data"  # Project data directory
+        ]
+        
+        for data_dir in search_dirs:
+            if not data_dir.exists():
+                continue
+            for focus_file in data_dir.glob("focus.*.json"):
+                with open(focus_file, "r") as f:
+                    daily_data.update(json.load(f))
+        
         update_streaks(daily_data, str(self.data_dir / "streaks.json"))
 
     def _build_streak_submenu(self):
@@ -121,58 +134,66 @@ class FocusApp(rumps.App):
         return submenu
 
     def _parse_latest_logs(self):
-        """Parse any new log data to JSON files."""
+        """Parse any available log data to JSON files."""
         try:
-            today = datetime.now().strftime("%Y-%m-%d")
-            
             # Look for logs in project directory first, then home directory
             project_log_dir = self.script_dir.parent / "logs"
             home_log_dir = Path.home() / ".raycast-focus-tracker" / "logs"
             
-            log_file = None
-            if (project_log_dir / f"focus.{today}.log").exists():
-                log_file = project_log_dir / f"focus.{today}.log"
-            elif (home_log_dir / f"focus.{today}.log").exists():
-                log_file = home_log_dir / f"focus.{today}.log"
+            # Find all log files, not just today's
+            log_files = []
+            output_dir = None
             
-            if log_file:
-                json_file = self.data_dir / f"focus.{today}.json"
+            # Prefer project directory logs and output to project directory
+            if project_log_dir.exists():
+                log_files = list(project_log_dir.glob("focus.*.log"))
+                output_dir = self.script_dir.parent / "data"
+            elif home_log_dir.exists():
+                log_files = list(home_log_dir.glob("focus.*.log"))
+                output_dir = self.data_dir
+            
+            if log_files and output_dir:
+                # Ensure output directory exists
+                output_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Parse the most recent log file (by modification time)
+                latest_log = max(log_files, key=lambda f: f.stat().st_mtime)
+                
                 # Import and run log parser
-                from .log_to_json import parse_log_file
-                parse_log_file(str(log_file), str(json_file))
-                print(f"Parsed {log_file} -> {json_file}")
+                from .log_to_json import parse_log_file_to_separate_dates
+                result = parse_log_file_to_separate_dates(str(latest_log), str(output_dir))
+                
+                if result:
+                    for date, json_file in result.items():
+                        print(f"Parsed {date} data from {latest_log} -> {json_file}")
+                else:
+                    print(f"No data extracted from {latest_log}")
             else:
-                print(f"No log file found for {today}")
+                print(f"No log files found")
         except Exception as e:
             print(f"Error parsing logs: {e}")
     
-    def _update_menu_data(self):
-        """Update menu data without rebuilding the entire menu."""
-        self._refresh_data()
-
-        # Update submenus in place
-        self._update_submenu("Streak Data", self._build_streak_submenu())
-        self._update_submenu("Today's Time", self._build_time_submenu())
-        self._update_submenu("Time by Goal", self._build_goals_submenu())
-
-    def _update_submenu(self, menu_title, items):
-        """Helper to update a submenu with new items."""
-        try:
-            self.menu[menu_title].clear()
-            for item in items:
-                self.menu[menu_title].add(item)
-        except Exception as e:
-            print(f"Error updating submenu {menu_title}: {e}")
-            # Fallback: rebuild entire menu
-            self.create_menu()
+    # Removed _update_menu_data() and _update_submenu() methods
+    # Now using full menu rebuild with create_menu() for all refreshes
+    # This is more reliable than trying to update submenus in place
 
     def _create_heatmap(self):
         """Create GitHub-style heatmap of focus sessions."""
         # Collect all focus data
         daily_data = {}
-        for focus_file in self.data_dir.glob("focus.*.json"):
-            with open(focus_file, "r") as f:
-                daily_data.update(json.load(f))
+        
+        # Check both home and project directories for focus data
+        search_dirs = [
+            self.data_dir,
+            Path(__file__).parent.parent / "data"  # Project data directory
+        ]
+        
+        for data_dir in search_dirs:
+            if not data_dir.exists():
+                continue
+            for focus_file in data_dir.glob("focus.*.json"):
+                with open(focus_file, "r") as f:
+                    daily_data.update(json.load(f))
 
         # Generate year data for heatmap
         year = datetime.now().year
@@ -214,22 +235,48 @@ class FocusApp(rumps.App):
     @rumps.clicked("Refresh")
     def refresh(self, _):
         """Refresh all menu data by parsing latest logs."""
-        self._parse_latest_logs()
-        self._update_menu_data()
+        print(f"Manual refresh triggered at {datetime.now()}")
+        try:
+            self._parse_latest_logs()
+            self._refresh_data()
+            # Force full menu rebuild instead of partial update
+            self.create_menu()
+            print("✅ Manual refresh completed successfully")
+        except Exception as e:
+            print(f"❌ Error during manual refresh: {e}")
+            # Fallback: still try to rebuild menu
+            try:
+                self.create_menu()
+            except Exception as e2:
+                print(f"❌ Error rebuilding menu: {e2}")
     
     def _auto_refresh(self, _):
         """Auto-refresh menu data every 5 seconds."""
         try:
             print(f"Auto-refresh triggered at {datetime.now()}")
             self._parse_latest_logs()
-            self._update_menu_data()
+            self._refresh_data()
+            # Force full menu rebuild for auto-refresh too
+            self.create_menu()
+            print("✅ Auto-refresh completed successfully")
         except Exception as e:
-            print(f"Error during auto-refresh: {e}")
-            # Fallback: rebuild menu
+            print(f"❌ Error during auto-refresh: {e}")
+            # Fallback: still try to rebuild menu
             try:
                 self.create_menu()
+                print("✅ Auto-refresh fallback menu rebuild succeeded")
             except Exception as e2:
-                print(f"Error rebuilding menu: {e2}")
+                print(f"❌ Error rebuilding menu in fallback: {e2}")
+        
+        # Ensure timer is still running (restart if needed)
+        try:
+            if not hasattr(self, '_auto_refresh_timer') or not self._auto_refresh_timer:
+                print("⚠️  Auto-refresh timer stopped, restarting...")
+                self._auto_refresh_timer = rumps.Timer(self._auto_refresh, 5)
+                self._auto_refresh_timer.start()
+                print("✅ Auto-refresh timer restarted")
+        except Exception as e:
+            print(f"❌ Error restarting auto-refresh timer: {e}")
     
     def quit_application(self, _):
         """Override rumps quit to stop background tracker."""

@@ -42,13 +42,22 @@ def get_today_minutes():
         int: Total minutes focused today, 0 if no data or error.
     """
     today = datetime.now().strftime("%Y-%m-%d")
-    focus_file = DATA_DIR / f"focus.{today}.json"
     
     try:
-        if focus_file.exists():
-            with open(focus_file, "r") as f:
-                data = json.load(f)
-                return data.get(today, {}).get("total_time_minutes", 0)
+        # Check both home and project directories for today's data
+        search_dirs = [
+            DATA_DIR,
+            Path(__file__).parent.parent / "data"  # Project data directory
+        ]
+        
+        for data_dir in search_dirs:
+            if not data_dir.exists():
+                continue
+            for focus_file in data_dir.glob("focus.*.json"):
+                with open(focus_file, "r") as f:
+                    data = json.load(f)
+                    if today in data:
+                        return data[today].get("total_time_minutes", 0)
     except Exception as e:
         print(f"Error accessing today's minutes: {e}")
     
@@ -80,13 +89,22 @@ def get_today_by_goal():
         dict: Mapping of goal names to minutes spent, empty if no data or error.
     """
     today = datetime.now().strftime("%Y-%m-%d")
-    focus_file = DATA_DIR / f"focus.{today}.json"
     
     try:
-        if focus_file.exists():
-            with open(focus_file, "r") as f:
-                data = json.load(f)
-                return data.get(today, {}).get("time_per_goal", {})
+        # Check both home and project directories for today's data
+        search_dirs = [
+            DATA_DIR,
+            Path(__file__).parent.parent / "data"  # Project data directory
+        ]
+        
+        for data_dir in search_dirs:
+            if not data_dir.exists():
+                continue
+            for focus_file in data_dir.glob("focus.*.json"):
+                with open(focus_file, "r") as f:
+                    data = json.load(f)
+                    if today in data:
+                        return data[today].get("time_per_goal", {})
     except Exception as e:
         print(f"Error accessing today's goals: {e}")
     

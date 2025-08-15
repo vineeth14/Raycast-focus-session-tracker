@@ -1,0 +1,19 @@
+2025-08-10 09:00:00.123 Raycast Extension Host[1234]: Start focus session
+2025-08-10 09:00:01.456 Raycast Extension Host[1234]: Goal: coding  
+2025-08-10 09:30:00.789 Raycast Extension Host[1234]: Complete focus session
+2025-08-10 09:30:01.000 Raycast Extension Host[1234]: Focus session activity summary
+2025-08-10 09:30:01.001 Raycast Extension Host[1234]: Start date: 2025-08-10 09:00:00
+2025-08-10 09:30:01.002 Raycast Extension Host[1234]: Duration: 30 minutes
+2025-08-10 09:30:01.003 Raycast Extension Host[1234]: Pauses Count: 0
+2025-08-10 09:30:01.004 Raycast Extension Host[1234]: Block Events Count: 0
+2025-08-10 09:30:01.005 Raycast Extension Host[1234]: Snooze Events Count: 0
+2025-08-10 14:00:00.100 Raycast Extension Host[1234]: Restoring stored form state
+2025-08-10 14:00:00.200 Raycast Extension Host[1234]: Start focus session
+2025-08-10 14:00:01.300 Raycast Extension Host[1234]: Goal: reading
+2025-08-10 14:15:00.400 Raycast Extension Host[1234]: Cancel focus session
+2025-08-10 14:15:01.500 Raycast Extension Host[1234]: Focus session activity summary  
+2025-08-10 14:15:01.501 Raycast Extension Host[1234]: Start date: 2025-08-10 14:00:00
+2025-08-10 14:15:01.502 Raycast Extension Host[1234]: Duration: 15 minutes
+2025-08-10 14:15:01.503 Raycast Extension Host[1234]: Pauses Count: 1
+2025-08-10 14:15:01.504 Raycast Extension Host[1234]: Block Events Count: 0
+2025-08-10 14:15:01.505 Raycast Extension Host[1234]: Snooze Events Count: 0

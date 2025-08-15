@@ -541,6 +541,82 @@ def parse_log_file(log_file_path, json_output_path):
     return data
 
 
+def parse_log_file_to_separate_dates(log_file_path, output_dir):
+    """Parse a log file and write each date's data to separate JSON files.
+    
+    Args:
+        log_file_path (str): Path to the log file
+        output_dir (str): Directory to write JSON files
+    
+    Returns:
+        dict: Mapping of date -> json_file_path for files created
+    """
+    from pathlib import Path
+    
+    # First parse the log file normally
+    temp_json = "/tmp/temp_parse.json"
+    data = parse_log_file(log_file_path, temp_json)
+    
+    if not data:
+        return {}
+    
+    output_dir = Path(output_dir)
+    result = {}
+    
+    # Write each date's data to its own file
+    for date, day_data in data.items():
+        json_file = output_dir / f"focus.{date}.json"
+        
+        # Create single-date data structure
+        single_date_data = {date: day_data}
+        
+        # If file exists, merge with existing data for that date only
+        if json_file.exists():
+            try:
+                with open(json_file, 'r') as f:
+                    existing_data = json.load(f)
+                
+                # Only keep data for this specific date
+                if date in existing_data:
+                    # Merge items and update totals
+                    existing_items = existing_data[date].get('items', [])
+                    new_items = day_data.get('items', [])
+                    
+                    # Combine and deduplicate items based on start_time
+                    all_items = existing_items + new_items
+                    seen_start_times = set()
+                    unique_items = []
+                    
+                    for item in all_items:
+                        if item['start_time'] not in seen_start_times:
+                            unique_items.append(item)
+                            seen_start_times.add(item['start_time'])
+                    
+                    # Update the day data with unique items
+                    single_date_data[date]['items'] = unique_items
+                    
+            except Exception as e:
+                print(f"Warning: Could not merge existing data for {date}: {e}")
+        
+        # Recalculate totals for this date only
+        recalculate_daily_totals(single_date_data)
+        
+        # Clean stale sessions for this date only
+        clean_stale_active_sessions(single_date_data)
+        
+        # Save to date-specific file
+        save_json(single_date_data, str(json_file))
+        result[date] = str(json_file)
+    
+    # Clean up temp file
+    try:
+        Path(temp_json).unlink(missing_ok=True)
+    except:
+        pass
+    
+    return result
+
+
 def _process_log_line(line, data, current_session_data):
     """Process a single log line.
     
