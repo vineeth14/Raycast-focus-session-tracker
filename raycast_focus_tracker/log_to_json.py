@@ -27,10 +27,19 @@ def load_or_create_json(json_path):
     Returns:
         dict: Existing data or empty dict
     """
-    json_file = Path(json_path)
-    if json_file.exists():
-        with open(json_file, 'r') as f:
-            return json.load(f)
+    try:
+        json_file = Path(json_path)
+        if json_file.exists():
+            with open(json_file, 'r') as f:
+                data = json.load(f)
+                # Validate that we got a dictionary
+                if isinstance(data, dict):
+                    return data
+                else:
+                    print(f"Warning: Invalid JSON structure in {json_path}, starting fresh")
+                    return {}
+    except (json.JSONDecodeError, PermissionError, OSError) as e:
+        print(f"Warning: Could not load {json_path}: {e}, starting fresh")
     return {}
 
 
@@ -75,8 +84,8 @@ def calculate_duration(start_time, end_time):
         end = datetime.fromisoformat(end_time.split('.')[0])
         duration_seconds = (end - start).total_seconds()
         duration_minutes = int(duration_seconds / 60)
-        # Return at least 1 minute for any completed session to ensure it counts
-        return max(1, duration_minutes) if duration_seconds > 0 else 0
+        # Return actual duration in minutes (can be 0 for very short sessions)
+        return duration_minutes
     except Exception:
         return 0
 
@@ -90,7 +99,7 @@ def parse_activity_duration(duration_text):
         int: Duration in minutes, or None if parsing fails
     """
     try:
-        if not duration_text or duration_text.strip() == "":
+        if not duration_text or not isinstance(duration_text, str) or duration_text.strip() == "":
             return None
             
         duration_text = duration_text.strip().lower()
@@ -100,15 +109,20 @@ def parse_activity_duration(duration_text):
         import re
         hour_match = re.search(r'(\d+)\s*hour', duration_text)
         if hour_match:
-            total_minutes += int(hour_match.group(1)) * 60
+            hours = int(hour_match.group(1))
+            if hours >= 0:  # Validate non-negative
+                total_minutes += hours * 60
         
         # Parse minutes
         minute_match = re.search(r'(\d+)\s*minute', duration_text)
         if minute_match:
-            total_minutes += int(minute_match.group(1))
+            minutes = int(minute_match.group(1))
+            if minutes >= 0:  # Validate non-negative
+                total_minutes += minutes
         
         return total_minutes if total_minutes > 0 else None
-    except Exception:
+    except (ValueError, AttributeError, TypeError) as e:
+        print(f"Warning: Error parsing duration '{duration_text}': {e}")
         return None
 
 
@@ -380,25 +394,33 @@ def _session_end_already_processed(day_data, goal, timestamp):
     return False
 
 def _find_active_session(day_data, recent_goal):
-    """Find and remove active session to complete."""
+    """Find and remove active session to complete using chronological order."""
     active_sessions = day_data.get('active_sessions', {})
     
     if not active_sessions:
         return None, None
     
-    # Look for active session matching the goal
-    matching_keys = [key for key in active_sessions.keys() 
-                    if active_sessions[key]['goal'] == recent_goal]
+    # If we have a recent goal from current session data, try to match it first
+    if recent_goal:
+        matching_keys = [key for key in active_sessions.keys() 
+                        if active_sessions[key]['goal'] == recent_goal]
+        
+        if matching_keys:
+            # Take the most recent matching session (last one)
+            session_key = matching_keys[-1]
+            session = active_sessions.pop(session_key)
+            return session, session_key
     
-    if matching_keys:
-        # Take the most recent matching session (last one)
-        session_key = matching_keys[-1]
-        session = active_sessions.pop(session_key)
-        return session, session_key
-    elif active_sessions:
-        # Fallback: take most recent active session of any goal
-        session_key = list(active_sessions.keys())[-1]
-        session = active_sessions.pop(session_key)
+    # Fallback: find the chronologically oldest active session
+    # This is most likely to be the one being completed
+    if active_sessions:
+        # Sort sessions by start_time to get the oldest one
+        sessions_by_time = sorted(
+            active_sessions.items(),
+            key=lambda x: x[1]['start_time']
+        )
+        session_key, session = sessions_by_time[0]
+        active_sessions.pop(session_key)
         return session, session_key
     
     return None, None
@@ -487,9 +509,14 @@ def save_json(data, json_path):
         data (dict): Data to save
         json_path (str): Output file path
     """
-    Path(json_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(json_path, 'w') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    try:
+        Path(json_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(json_path, 'w') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except (PermissionError, OSError, IOError) as e:
+        print(f"Warning: Could not save to {json_path}: {e}")
+    except TypeError as e:
+        print(f"Warning: Data serialization error for {json_path}: {e}")
 
 def parse_log_file(log_file_path, json_output_path):
     """Main function to parse log file and convert to JSON structure.
@@ -625,28 +652,38 @@ def _process_log_line(line, data, current_session_data):
         data (dict): Main data structure
         current_session_data (dict): Session tracking data
     """
-    line_handlers = {
-        "Start focus session": handle_session_start,
-        "Goal:": _handle_goal_line,
-        "Complete focus session": handle_session_end,
-        "Cancel focus session": handle_session_end,
-        "Focus session activity summary": _handle_activity_summary_start,
-        "Restoring stored form state": _handle_form_state_reset
-    }
-    
-    # Check for activity summary lines first
-    if current_session_data.get('in_activity_summary'):
-        print(f"Processing activity line: {line}")
-        handle_activity_summary_line(line, data, current_session_data)
-        return
-    
-    # Process other line types
-    matched = False
-    for key, handler in line_handlers.items():
-        if key in line:
-            handler(line, data, current_session_data)
-            matched = True
-            break
+    try:
+        line_handlers = {
+            "Start focus session": handle_session_start,
+            "Goal:": _handle_goal_line,
+            "Complete focus session": handle_session_end,
+            "Cancel focus session": handle_session_end,
+            "Focus session activity summary": _handle_activity_summary_start,
+            "Restoring stored form state": _handle_form_state_reset
+        }
+        
+        # Check for activity summary lines first
+        if current_session_data.get('in_activity_summary'):
+            handle_activity_summary_line(line, data, current_session_data)
+            return
+        
+        # Process other line types
+        matched = False
+        for key, handler in line_handlers.items():
+            if key in line:
+                try:
+                    handler(line, data, current_session_data)
+                    matched = True
+                    break
+                except Exception as e:
+                    # Log the error but continue processing
+                    print(f"Warning: Error in handler for '{key}': {e}")
+                    continue
+    except Exception as e:
+        # Catch any unexpected errors in the main processing logic
+        print(f"Warning: Error processing log line: {e}")
+        print(f"Line content: {line}")
+        pass
     
 
 def _handle_goal_line(line, data, current_session_data):

@@ -150,7 +150,7 @@ class TestStreakCalculation:
         result = _calculate_current_streak(daily_data)
         
         # Assert
-        assert result == 1  # Only counts 2025-08-11
+        assert result == 0  # Streak broken by 2025-08-12 having 0 minutes
 
     def test_calculate_current_streak_unsorted_dates(self):
         """Test calculating current streak with unsorted date keys."""

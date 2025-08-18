@@ -18,10 +18,20 @@ def load_streaks(path="data/streaks.json"):
     Returns:
         dict: Streak data with current_streak and longest_streak keys
     """
-    streak_file = Path(path)
-    if streak_file.exists():
-        with open(streak_file, "r") as f:
-            return json.load(f)
+    try:
+        streak_file = Path(path)
+        if streak_file.exists():
+            with open(streak_file, "r") as f:
+                data = json.load(f)
+                # Validate the JSON structure
+                if isinstance(data, dict) and "current_streak" in data and "longest_streak" in data:
+                    return data
+                else:
+                    # Invalid JSON structure, return default
+                    return {"current_streak": 0, "longest_streak": 0}
+    except (json.JSONDecodeError, PermissionError, OSError):
+        # Handle invalid JSON, permission errors, or other file access issues
+        pass
     return {"current_streak": 0, "longest_streak": 0}
 
 
@@ -32,9 +42,14 @@ def save_streaks(streaks, path="data/streaks.json"):
         streaks (dict): Streak data to save
         path (str): Path to output file
     """
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
-        json.dump(streaks, f, indent=2)
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(streaks, f, indent=2)
+    except (PermissionError, OSError, IOError):
+        # Silently handle permission errors and other file access issues
+        # This allows the application to continue working even if file write fails
+        pass
 
 
 def update_streaks(daily_data, streaks_path="data/streaks.json"):
@@ -83,7 +98,16 @@ def _calculate_current_streak(daily_data):
     current_streak = 0
     
     for date in reversed(sorted(daily_data.keys())):
-        if daily_data[date].get("total_time_minutes", 0) > 0:
+        day_data = daily_data.get(date, {})
+        total_time = day_data.get("total_time_minutes")
+        
+        # Handle case where total_time_minutes might be missing or None
+        if total_time is None:
+            # If total_time_minutes is missing, calculate from time_per_goal
+            time_per_goal = day_data.get("time_per_goal", {})
+            total_time = sum(time_per_goal.values()) if time_per_goal else 0
+            
+        if total_time > 0:
             current_streak += 1
         else:
             break

@@ -96,16 +96,16 @@ class TestLogUtilities:
         # Assert
         assert result == 30
 
-    def test_calculate_duration_minimum_one_minute(self):
-        """Test that completed sessions get minimum 1 minute duration."""
+    def test_calculate_duration_sub_minute(self):
+        """Test that short sessions return actual duration (can be 0 minutes)."""
         # Test
         result = calculate_duration(
             "2025-08-10 14:00:00.000",
             "2025-08-10 14:00:30.000"  # 30 seconds
         )
         
-        # Assert
-        assert result == 1
+        # Assert - 30 seconds should be 0 minutes when rounded down
+        assert result == 0
 
     def test_calculate_duration_error(self):
         """Test duration calculation with invalid timestamps."""

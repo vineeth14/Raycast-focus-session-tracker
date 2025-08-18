@@ -47,19 +47,32 @@ class FocusApp(rumps.App):
         print(f"✅ Menu bar app initialized successfully")
 
     def create_menu(self):
-        self.menu.clear()
-        self._refresh_data()
+        try:
+            self.menu.clear()
+            self._refresh_data()
 
-        self.menu.update(
-            [
-                ("Streak Data", self._build_streak_submenu()),
-                ("Today's Time", self._build_time_submenu()),
-                ("Time by Goal", self._build_goals_submenu()),
-                rumps.separator,
-                "Show Heatmap",
-                "Refresh",
-            ]
-        )
+            # Add submenus
+            self.menu.add(rumps.MenuItem("Streak Data", callback=None))
+            self.menu["Streak Data"].update(self._build_streak_submenu())
+            
+            self.menu.add(rumps.MenuItem("Today's Time", callback=None))
+            self.menu["Today's Time"].update(self._build_time_submenu())
+            
+            self.menu.add(rumps.MenuItem("Time by Goal", callback=None))
+            self.menu["Time by Goal"].update(self._build_goals_submenu())
+            
+            # Add separator
+            self.menu.add(rumps.separator)
+            
+            # Add clickable buttons
+            self.menu.add(rumps.MenuItem("Show Heatmap", callback=self.show_heatmap))
+            self.menu.add(rumps.MenuItem("Refresh", callback=self.refresh))
+            
+            print("✅ Menu created successfully")
+        except Exception as e:
+            print(f"❌ Error creating menu: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _refresh_data(self):
         """Load all focus data and update streaks."""

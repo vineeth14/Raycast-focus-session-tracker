@@ -47,17 +47,22 @@ def get_today_minutes():
         # Check both home and project directories for today's data
         search_dirs = [
             DATA_DIR,
-            Path(__file__).parent.parent / "data"  # Project data directory
+            Path(__file__).parent.parent / "data",  # Project data directory
+            Path.home() / ".raycast-focus-tracker" / "data",  # Home directory
+            Path(__file__).parent / "data"  # Package data directory
         ]
         
         for data_dir in search_dirs:
             if not data_dir.exists():
                 continue
             for focus_file in data_dir.glob("focus.*.json"):
-                with open(focus_file, "r") as f:
-                    data = json.load(f)
-                    if today in data:
-                        return data[today].get("total_time_minutes", 0)
+                try:
+                    with open(focus_file, "r") as f:
+                        data = json.load(f)
+                        if today in data and "total_time_minutes" in data[today]:
+                            return data[today].get("total_time_minutes", 0)
+                except (json.JSONDecodeError, KeyError, PermissionError):
+                    continue  # Skip invalid files
     except Exception as e:
         print(f"Error accessing today's minutes: {e}")
     
@@ -94,17 +99,22 @@ def get_today_by_goal():
         # Check both home and project directories for today's data
         search_dirs = [
             DATA_DIR,
-            Path(__file__).parent.parent / "data"  # Project data directory
+            Path(__file__).parent.parent / "data",  # Project data directory
+            Path.home() / ".raycast-focus-tracker" / "data",  # Home directory
+            Path(__file__).parent / "data"  # Package data directory
         ]
         
         for data_dir in search_dirs:
             if not data_dir.exists():
                 continue
             for focus_file in data_dir.glob("focus.*.json"):
-                with open(focus_file, "r") as f:
-                    data = json.load(f)
-                    if today in data:
-                        return data[today].get("time_per_goal", {})
+                try:
+                    with open(focus_file, "r") as f:
+                        data = json.load(f)
+                        if today in data and "time_per_goal" in data[today]:
+                            return data[today].get("time_per_goal", {})
+                except (json.JSONDecodeError, KeyError, PermissionError):
+                    continue  # Skip invalid files
     except Exception as e:
         print(f"Error accessing today's goals: {e}")
     
@@ -120,18 +130,32 @@ def _get_streak_value(streak_type):
     Returns:
         int: Streak value, 0 if not found or error.
     """
-    possible_files = [
-        DATA_DIR / "streaks.json",
-        DATA_DIR / "sessions.json"  # Legacy fallback
+    # Check multiple possible locations for streak files
+    search_dirs = [
+        DATA_DIR,
+        Path(__file__).parent.parent / "data",  # Project data directory
+        Path.home() / ".raycast-focus-tracker" / "data",  # Home directory
+        Path(__file__).parent / "data"  # Package data directory
     ]
     
     try:
-        for file_path in possible_files:
-            if file_path.exists():
-                with open(file_path, "r") as f:
-                    data = json.load(f)
-                    if streak_type in data:
-                        return data.get(streak_type, 0)
+        for data_dir in search_dirs:
+            if not data_dir.exists():
+                continue
+            possible_files = [
+                data_dir / "streaks.json",
+                data_dir / "sessions.json"  # Legacy fallback
+            ]
+            
+            for file_path in possible_files:
+                if file_path.exists():
+                    try:
+                        with open(file_path, "r") as f:
+                            data = json.load(f)
+                            if streak_type in data:
+                                return data.get(streak_type, 0)
+                    except (json.JSONDecodeError, KeyError, PermissionError):
+                        continue  # Skip invalid files
     except Exception as e:
         print(f"Error accessing {streak_type}: {e}")
     
