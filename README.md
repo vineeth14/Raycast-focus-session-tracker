@@ -4,6 +4,10 @@ A macOS menu bar application that tracks your Raycast focus sessions and display
 
 Monitor your focus patterns, build streaks, and visualize your productivity over time with a clean menu bar interface and GitHub-style calendar heatmaps.
 
+## How Session Completion is Handled
+
+The tracker accurately captures your actual focus time by intelligently processing Raycast's activity summaries. Early completions show real focus time (not planned time), cancelled sessions don't count toward totals, pause time is excluded from duration calculations, and multiple sessions per goal are tracked separately. Only completed, non-cancelled sessions contribute to daily totals and streak calculations, ensuring your statistics reflect genuine productivity.
+
 ## Installation
 
 ```bash
@@ -52,5 +56,4 @@ The app displays a 🎯 icon in your menu bar showing:
 ## Dependencies
 
 - [rumps](https://github.com/jaredks/rumps) - macOS menu bar framework
-- [lesley](https://github.com/astariul/lesley) - Calendar heatmap visualization  
-- [pandas](https://pandas.pydata.org/) - Data processing
+- [lesley](https://github.com/astariul/lesley) - Calendar heatmap visualization

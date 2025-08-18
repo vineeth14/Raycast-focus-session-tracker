@@ -8,8 +8,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         "rumps==0.4.0",
-        "lesley==0.3.0", 
-        "pandas==2.3.1"
+        "lesley==0.3.0"
     ],
     entry_points={
         'console_scripts': [
