@@ -95,21 +95,41 @@ def _calculate_current_streak(daily_data):
     Returns:
         int: Current streak length in days
     """
+    from datetime import datetime, timedelta
+    
+    if not daily_data:
+        return 0
+    
+    # Find the most recent date in our data
+    most_recent_date = max(daily_data.keys())
+    current_date = datetime.strptime(most_recent_date, "%Y-%m-%d")
     current_streak = 0
     
-    for date in reversed(sorted(daily_data.keys())):
-        day_data = daily_data.get(date, {})
-        total_time = day_data.get("total_time_minutes")
+    # Work backwards day by day checking calendar continuity
+    while True:
+        date_str = current_date.strftime("%Y-%m-%d")
         
-        # Handle case where total_time_minutes might be missing or None
-        if total_time is None:
-            # If total_time_minutes is missing, calculate from time_per_goal
-            time_per_goal = day_data.get("time_per_goal", {})
-            total_time = sum(time_per_goal.values()) if time_per_goal else 0
+        # Check if we have data for this date
+        if date_str in daily_data:
+            day_data = daily_data[date_str]
+            total_time = day_data.get("total_time_minutes")
             
-        if total_time > 0:
-            current_streak += 1
+            # Handle case where total_time_minutes might be missing or None
+            if total_time is None:
+                # If total_time_minutes is missing, calculate from time_per_goal
+                time_per_goal = day_data.get("time_per_goal", {})
+                total_time = sum(time_per_goal.values()) if time_per_goal else 0
+                
+            if total_time > 0:
+                current_streak += 1
+            else:
+                # Day exists but has 0 minutes - streak broken
+                break
         else:
+            # Missing day - treat as 0 minutes, streak broken
             break
+        
+        # Move to previous day
+        current_date -= timedelta(days=1)
     
     return current_streak
