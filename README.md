@@ -13,6 +13,19 @@ The tracker accurately captures your actual focus time by intelligently processi
 ```bash
 git clone https://github.com/vineeth14/Raycast-focus-session-tracker.git
 cd Raycast-focus-session-tracker
+```
+
+then
+
+with [uv](https://docs.astral.sh/uv/) installed you can build the project with
+```bash
+uv venv --python 3.11
+uv pip install -e .
+```
+
+or simply run
+
+```
 pip install -e .
 ```
 
