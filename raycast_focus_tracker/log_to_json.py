@@ -557,21 +557,36 @@ def parse_log_file(log_file_path, json_output_path):
     
     parser_state = load_parser_state(STATE_FILE)
     last_processed_line = parser_state.get(log_file_path, 0)
-    
+
+    # Get current total lines in file
+    try:
+        with open(log_file_path, 'r') as f:
+            total_lines = sum(1 for _ in f)
+    except FileNotFoundError:
+        print(f"Log file not found: {log_file_path}")
+        return None
+
+    # If file has more lines than we processed last time, process the new lines
+    if total_lines <= last_processed_line:
+        print("No new lines to process.")
+        return data
+
+    print(f"Processing lines {last_processed_line + 1} to {total_lines}...")
+
     data = load_or_create_json(json_output_path)
-    
+
     # Clean up stale active sessions from previous parsing
     clean_stale_active_sessions(data)
-    
+
     current_session_data = {}
     lines_processed = 0
-    
+
     try:
         with open(log_file_path, 'r') as f:
             # Skip already processed lines
             for _ in range(last_processed_line):
                 next(f)
-            
+
             for line_num, line in enumerate(f, last_processed_line + 1):
                 line = line.strip()
                 if not line:
@@ -600,8 +615,8 @@ def parse_log_file(log_file_path, json_output_path):
     recalculate_daily_totals(data)
     save_json(data, json_output_path)
     
-    # Update parser state
-    parser_state[log_file_path] = last_processed_line + lines_processed
+    # Update parser state with total lines processed so far
+    parser_state[log_file_path] = total_lines
     save_parser_state(STATE_FILE, parser_state)
     
     # Print summary
