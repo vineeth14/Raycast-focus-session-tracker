@@ -75,6 +75,8 @@ class TestStreakLoading:
         assert saved_data == sample_streak_data
 
 
+from datetime import date, datetime
+
 class TestStreakCalculation:
     """Test streak calculation logic."""
 
@@ -89,7 +91,8 @@ class TestStreakCalculation:
         }
         
         # Test
-        result = _calculate_current_streak(daily_data)
+        today = date(2025, 8, 13)
+        result = _calculate_current_streak(daily_data, today=today)
         
         # Assert
         assert result == 4
@@ -105,7 +108,8 @@ class TestStreakCalculation:
         }
         
         # Test
-        result = _calculate_current_streak(daily_data)
+        today = date(2025, 8, 13)
+        result = _calculate_current_streak(daily_data, today=today)
         
         # Assert
         assert result == 2  # Only counts the last 2 days
@@ -121,7 +125,8 @@ class TestStreakCalculation:
         }
         
         # Test
-        result = _calculate_current_streak(daily_data)
+        today = date(2025, 8, 13)
+        result = _calculate_current_streak(daily_data, today=today)
         
         # Assert
         assert result == 0  # Streak is broken
@@ -147,7 +152,8 @@ class TestStreakCalculation:
         }
         
         # Test
-        result = _calculate_current_streak(daily_data)
+        today = date(2025, 8, 12)
+        result = _calculate_current_streak(daily_data, today=today)
         
         # Assert
         assert result == 0  # Streak broken by 2025-08-12 having 0 minutes
@@ -163,18 +169,42 @@ class TestStreakCalculation:
         }
         
         # Test
-        result = _calculate_current_streak(daily_data)
+        today = date(2025, 8, 13)
+        result = _calculate_current_streak(daily_data, today=today)
         
         # Assert
         assert result == 4  # Should handle unsorted dates correctly
+
+    def test_calculate_current_streak_stale_streak(self):
+        """Test that streak is broken if not continued yesterday or today."""
+        from datetime import date
+        
+        # Setup - streak ended 2 days ago
+        daily_data = {
+            "2025-08-10": {"total_time_minutes": 30},
+            "2025-08-11": {"total_time_minutes": 45}
+        }
+        
+        # Mock today's date to be 2025-08-13
+        today = date(2025, 8, 13)
+
+        # Test
+        result = _calculate_current_streak(daily_data, today=today)
+        
+        # Assert
+        assert result == 0
 
 
 class TestStreakUpdating:
     """Test the main streak updating functionality."""
 
-    def test_update_streaks_new_record(self, temp_data_dir):
+    @patch('datetime.datetime')
+    def test_update_streaks_new_record(self, mock_datetime, temp_data_dir):
         """Test updating streaks when a new longest streak is achieved."""
         # Setup
+        mock_datetime.now.return_value.date.return_value = date(2025, 8, 13)
+        mock_datetime.strptime = MagicMock(wraps=datetime.strptime)
+
         streaks_file = temp_data_dir / "streaks.json"
         initial_streaks = {"current_streak": 2, "longest_streak": 3}
         with open(streaks_file, 'w') as f:
@@ -199,9 +229,13 @@ class TestStreakUpdating:
             saved_data = json.load(f)
         assert saved_data["longest_streak"] == 4
 
-    def test_update_streaks_no_new_record(self, temp_data_dir):
+    @patch('datetime.datetime')
+    def test_update_streaks_no_new_record(self, mock_datetime, temp_data_dir):
         """Test updating streaks when no new record is achieved."""
         # Setup
+        mock_datetime.now.return_value.date.return_value = date(2025, 8, 13)
+        mock_datetime.strptime = MagicMock(wraps=datetime.strptime)
+
         streaks_file = temp_data_dir / "streaks.json"
         initial_streaks = {"current_streak": 5, "longest_streak": 10}
         with open(streaks_file, 'w') as f:
@@ -225,9 +259,13 @@ class TestStreakUpdating:
             saved_data = json.load(f)
         assert saved_data["current_streak"] == 3
 
-    def test_update_streaks_no_change(self, temp_data_dir):
+    @patch('datetime.datetime')
+    def test_update_streaks_no_change(self, mock_datetime, temp_data_dir):
         """Test updating streaks when nothing changes."""
         # Setup
+        mock_datetime.now.return_value.date.return_value = date(2025, 8, 13)
+        mock_datetime.strptime = MagicMock(wraps=datetime.strptime)
+
         streaks_file = temp_data_dir / "streaks.json"
         initial_streaks = {"current_streak": 3, "longest_streak": 10}
         with open(streaks_file, 'w') as f:
@@ -249,9 +287,13 @@ class TestStreakUpdating:
         # File should not have been updated since nothing changed
         # We can't easily test this without mocking, but the logic is there
 
-    def test_update_streaks_nonexistent_file(self, temp_data_dir):
+    @patch('datetime.datetime')
+    def test_update_streaks_nonexistent_file(self, mock_datetime, temp_data_dir):
         """Test updating streaks when streaks file doesn't exist."""
         # Setup
+        mock_datetime.now.return_value.date.return_value = date(2025, 8, 13)
+        mock_datetime.strptime = MagicMock(wraps=datetime.strptime)
+
         streaks_file = temp_data_dir / "nonexistent.json"
         daily_data = {
             "2025-08-12": {"total_time_minutes": 60},
@@ -268,9 +310,13 @@ class TestStreakUpdating:
         # File should have been created
         assert streaks_file.exists()
 
-    def test_update_streaks_streak_broken(self, temp_data_dir):
+    @patch('datetime.datetime')
+    def test_update_streaks_streak_broken(self, mock_datetime, temp_data_dir):
         """Test updating streaks when current streak is broken."""
         # Setup
+        mock_datetime.now.return_value.date.return_value = date(2025, 8, 13)
+        mock_datetime.strptime = MagicMock(wraps=datetime.strptime)
+
         streaks_file = temp_data_dir / "streaks.json"
         initial_streaks = {"current_streak": 5, "longest_streak": 10}
         with open(streaks_file, 'w') as f:
@@ -290,9 +336,13 @@ class TestStreakUpdating:
         assert result["current_streak"] == 0
         assert result["longest_streak"] == 10  # Unchanged
 
-    def test_update_streaks_with_default_path(self, temp_data_dir):
+    @patch('datetime.datetime')
+    def test_update_streaks_with_default_path(self, mock_datetime, temp_data_dir):
         """Test update_streaks with default path parameter."""
         # Setup - change working directory context
+        mock_datetime.now.return_value.date.return_value = date(2025, 8, 13)
+        mock_datetime.strptime = MagicMock(wraps=datetime.strptime)
+
         with patch('raycast_focus_tracker.streak_calculation.Path') as mock_path:
             mock_path.return_value.parent.mkdir.return_value = None
             mock_path.return_value.exists.return_value = False
@@ -344,20 +394,106 @@ class TestEdgeCases:
     def test_calculate_current_streak_very_large_dataset(self):
         """Test streak calculation with a large number of days."""
         # Setup - 1000 days of continuous focus
+        from datetime import date, timedelta
+        start_date = date(2023, 1, 1)
         daily_data = {}
         for i in range(1000):
-            date = f"2023-01-{i+1:03d}" if i < 365 else f"2024-01-{i-364:03d}" if i < 730 else f"2025-01-{i-729:03d}"
-            daily_data[date] = {"total_time_minutes": 30}
+            current_date = start_date + timedelta(days=i)
+            daily_data[current_date.strftime("%Y-%m-%d")] = {"total_time_minutes": 30}
         
         # Test
-        result = _calculate_current_streak(daily_data)
+        today = start_date + timedelta(days=999)
+        result = _calculate_current_streak(daily_data, today=today)
         
         # Assert
         assert result == 1000
 
-    def test_update_streaks_concurrent_access(self, temp_data_dir):
+    @patch('datetime.datetime')
+    def test_update_streaks_concurrent_access(self, mock_datetime, temp_data_dir):
         """Test update_streaks behavior with simulated concurrent file access."""
         # Setup
+        mock_datetime.now.return_value.date.return_value = date(2025, 8, 13)
+        mock_datetime.strptime = MagicMock(wraps=datetime.strptime)
+
+        streaks_file = temp_data_dir / "streaks.json"
+        initial_streaks = {"current_streak": 1, "longest_streak": 5}
+        
+        daily_data = {
+            "2025-08-13": {"total_time_minutes": 25}
+        }
+        
+        # Simulate race condition where file changes between read and write
+        def mock_load_streaks(path):
+            return initial_streaks.copy()
+        
+        def mock_save_streaks(streaks, path):
+            # Simulate another process updating the file
+            pass
+        
+        with patch('raycast_focus_tracker.streak_calculation.load_streaks', mock_load_streaks):
+            with patch('raycast_focus_tracker.streak_calculation.save_streaks', mock_save_streaks):
+                # Test
+                result = update_streaks(daily_data, str(streaks_file))
+        
+        # Assert - should still return correct calculation
+        assert result["current_streak"] == 1  # Based on daily_data
+        assert result["longest_streak"] == 5   # From initial data
+
+
+class TestEdgeCases:
+    """Test edge cases and error scenarios."""
+
+    def test_load_streaks_invalid_json(self, temp_data_dir):
+        """Test loading streaks from file with invalid JSON."""
+        # Setup
+        streaks_file = temp_data_dir / "invalid.json"
+        with open(streaks_file, 'w') as f:
+            f.write("invalid json content")
+        
+        # Test - should not crash, should return default
+        with patch('builtins.print'):  # Suppress error output
+            result = load_streaks(str(streaks_file))
+        
+        # Assert - should fall back to default values
+        assert result == {"current_streak": 0, "longest_streak": 0}
+
+    def test_save_streaks_permission_error(self, temp_data_dir, sample_streak_data):
+        """Test saving streaks when file permissions prevent writing."""
+        # Setup
+        streaks_file = temp_data_dir / "readonly.json"
+        
+        # Create file and make directory read-only (simulation)
+        with patch('builtins.open', side_effect=PermissionError("Permission denied")):
+            # Test - should not crash
+            try:
+                save_streaks(sample_streak_data, str(streaks_file))
+            except PermissionError:
+                pytest.fail("save_streaks should handle permission errors gracefully")
+
+    def test_calculate_current_streak_very_large_dataset(self):
+        """Test streak calculation with a large number of days."""
+        # Setup - 1000 days of continuous focus
+        from datetime import date, timedelta
+        start_date = date(2023, 1, 1)
+        daily_data = {}
+        for i in range(1000):
+            current_date = start_date + timedelta(days=i)
+            daily_data[current_date.strftime("%Y-%m-%d")] = {"total_time_minutes": 30}
+        
+        # Test
+        today = start_date + timedelta(days=999)
+        result = _calculate_current_streak(daily_data, today=today)
+        
+        # Assert
+        assert result == 1000
+
+    @patch('datetime.datetime')
+    def test_update_streaks_concurrent_access(self, mock_datetime, temp_data_dir):
+        """Test update_streaks behavior with simulated concurrent file access."""
+        # Setup
+        mock_datetime.now.return_value.date.return_value = date(2025, 8, 13)
+        mock_datetime.strptime = MagicMock(wraps=datetime.strptime)
+
         streaks_file = temp_data_dir / "streaks.json"
         initial_streaks = {"current_streak": 1, "longest_streak": 5}
         

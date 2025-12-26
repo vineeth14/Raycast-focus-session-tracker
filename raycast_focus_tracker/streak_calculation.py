@@ -62,9 +62,10 @@ def update_streaks(daily_data, streaks_path="data/streaks.json"):
     Returns:
         dict: Updated streak data
     """
+    from datetime import datetime
     streaks = load_streaks(streaks_path)
     
-    current_streak = _calculate_current_streak(daily_data)
+    current_streak = _calculate_current_streak(daily_data, today=datetime.now().date())
     previous_current = streaks.get("current_streak", 0)
     
     # Update current_streak in memory
@@ -86,11 +87,12 @@ def update_streaks(daily_data, streaks_path="data/streaks.json"):
     return streaks
 
 
-def _calculate_current_streak(daily_data):
+def _calculate_current_streak(daily_data, today=None):
     """Calculate current consecutive streak days.
     
     Args:
         daily_data (dict): Daily focus data keyed by date
+        today (date, optional): The current date. Defaults to None.
         
     Returns:
         int: Current streak length in days
@@ -100,9 +102,18 @@ def _calculate_current_streak(daily_data):
     if not daily_data:
         return 0
     
+    if today is None:
+        today = datetime.now().date()
+    
     # Find the most recent date in our data
-    most_recent_date = max(daily_data.keys())
-    current_date = datetime.strptime(most_recent_date, "%Y-%m-%d")
+    most_recent_date_str = max(daily_data.keys())
+    most_recent_date = datetime.strptime(most_recent_date_str, "%Y-%m-%d").date()
+    
+    # Check if the streak is already broken
+    if (today - most_recent_date).days > 1:
+        return 0
+
+    current_date = datetime.strptime(most_recent_date_str, "%Y-%m-%d")
     current_streak = 0
     
     # Work backwards day by day checking calendar continuity

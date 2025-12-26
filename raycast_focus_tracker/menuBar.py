@@ -169,18 +169,21 @@ class FocusApp(rumps.App):
                 # Ensure output directory exists
                 output_dir.mkdir(parents=True, exist_ok=True)
                 
-                # Parse the most recent log file (by modification time)
-                latest_log = max(log_files, key=lambda f: f.stat().st_mtime)
-                
                 # Import and run log parser
                 from .log_to_json import parse_log_file_to_separate_dates
-                result = parse_log_file_to_separate_dates(str(latest_log), str(output_dir))
                 
-                if result:
-                    for date, json_file in result.items():
-                        print(f"Parsed {date} data from {latest_log} -> {json_file}")
-                else:
-                    print(f"No data extracted from {latest_log}")
+                # --- Parse all available log files ---
+                for log_file in log_files:
+                    try:
+                        result = parse_log_file_to_separate_dates(str(log_file), str(output_dir))
+                        
+                        if result:
+                            for date, json_file in result.items():
+                                print(f"Parsed {date} data from {log_file} -> {json_file}")
+                        else:
+                            print(f"No new data extracted from {log_file}")
+                    except Exception as e:
+                        print(f"Error parsing log file {log_file}: {e}")
             else:
                 print(f"No log files found")
         except Exception as e:
@@ -283,7 +286,9 @@ class FocusApp(rumps.App):
         
         # Ensure timer is still running (restart if needed)
         try:
-            if not hasattr(self, '_auto_refresh_timer') or not self._auto_refresh_timer:
+            if (not hasattr(self, '_auto_refresh_timer') or
+                self._auto_refresh_timer is None or
+                not self._auto_refresh_timer.is_alive()):
                 print("⚠️  Auto-refresh timer stopped, restarting...")
                 self._auto_refresh_timer = rumps.Timer(self._auto_refresh, 5)
                 self._auto_refresh_timer.start()

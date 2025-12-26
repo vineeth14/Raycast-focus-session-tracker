@@ -17,6 +17,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+STATE_FILE = Path.home() / ".raycast-focus-tracker" / ".parser_state.json"
+
+
+
 
 def load_or_create_json(json_path):
     """Load existing JSON data or create empty structure.
@@ -41,6 +45,27 @@ def load_or_create_json(json_path):
     except (json.JSONDecodeError, PermissionError, OSError) as e:
         print(f"Warning: Could not load {json_path}: {e}, starting fresh")
     return {}
+
+
+def load_parser_state(state_file_path):
+    """Loads the parser state from a file."""
+    state_file = Path(state_file_path)
+    if state_file.exists():
+        try:
+            with open(state_file, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, PermissionError, OSError) as e:
+            print(f"Warning: Could not load parser state: {e}")
+    return {}
+
+
+def save_parser_state(state_file_path, state):
+    """Saves the parser state to a file."""
+    try:
+        with open(state_file_path, 'w') as f:
+            json.dump(state, f, indent=2)
+    except (PermissionError, OSError, IOError) as e:
+        print(f"Warning: Could not save parser state: {e}")
 
 
 def get_date_from_timestamp(timestamp_str):
@@ -530,23 +555,31 @@ def parse_log_file(log_file_path, json_output_path):
     """
     print(f"Parsing {log_file_path} -> {json_output_path}")
     
+    parser_state = load_parser_state(STATE_FILE)
+    last_processed_line = parser_state.get(log_file_path, 0)
+    
     data = load_or_create_json(json_output_path)
     
     # Clean up stale active sessions from previous parsing
     clean_stale_active_sessions(data)
     
     current_session_data = {}
+    lines_processed = 0
     
     try:
         with open(log_file_path, 'r') as f:
-            for line_num, line in enumerate(f, 1):
+            # Skip already processed lines
+            for _ in range(last_processed_line):
+                next(f)
+            
+            for line_num, line in enumerate(f, last_processed_line + 1):
                 line = line.strip()
                 if not line:
                     continue
                 
-                
                 try:
                     _process_log_line(line, data, current_session_data)
+                    lines_processed += 1
                 except Exception as e:
                     print(f"Warning: Error processing line {line_num}: {e}")
                     print(f"Line content: {line}")
@@ -555,15 +588,26 @@ def parse_log_file(log_file_path, json_output_path):
     except FileNotFoundError:
         print(f"Error: Log file not found: {log_file_path}")
         return None
-    
+    except StopIteration:
+        # This means we have reached the end of the file, which is fine
+        pass
+        
+    if lines_processed == 0:
+        print("No new lines to process.")
+        return data
+
     # Finalize data
     recalculate_daily_totals(data)
     save_json(data, json_output_path)
     
+    # Update parser state
+    parser_state[log_file_path] = last_processed_line + lines_processed
+    save_parser_state(STATE_FILE, parser_state)
+    
     # Print summary
     total_days = len(data)
     total_sessions = sum(len(day_data.get('items', [])) for day_data in data.values())
-    print(f"Processed {total_days} days, {total_sessions} sessions")
+    print(f"Processed {lines_processed} new lines, {total_days} days, {total_sessions} sessions")
     
     return data
 

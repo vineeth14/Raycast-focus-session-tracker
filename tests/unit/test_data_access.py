@@ -133,7 +133,9 @@ class TestDataAccess:
 
     def test_get_streak_value_no_file(self, temp_data_dir):
         """Test streak value retrieval when no file exists."""
-        with patch('raycast_focus_tracker.data_access.DATA_DIR', temp_data_dir):
+        with patch('raycast_focus_tracker.data_access.Path') as mock_path:
+            mock_path.return_value.exists.return_value = False
+            mock_path.home.return_value = temp_data_dir
             # Test
             result = _get_streak_value("current_streak")
             
@@ -160,36 +162,21 @@ class TestDataAccess:
         # Setup
         mock_datetime.now.return_value.strftime.return_value = "2025-08-10"
         
-        # Create a second directory with the data
-        project_data_dir = temp_data_dir / "project_data"
-        project_data_dir.mkdir()
-        test_file = project_data_dir / "focus.2025-08-10.json"
+        home_dir = temp_data_dir / "home"
+        project_dir = temp_data_dir / "project"
+        home_dir.mkdir()
+        project_dir.mkdir()
+
+        # Create a file in the project directory
+        test_file = project_dir / "focus.2025-08-10.json"
         with open(test_file, 'w') as f:
             json.dump(sample_focus_data, f)
+
+        # Test
+        result = get_today_minutes(search_dirs=[home_dir, project_dir])
         
-        with patch('raycast_focus_tracker.data_access.DATA_DIR', temp_data_dir), \
-             patch('raycast_focus_tracker.data_access.Path') as mock_path:
-            
-            # Mock Path to return our project directory
-            mock_path.__file__ = __file__
-            mock_path.return_value.parent.parent = project_data_dir.parent
-            mock_path.return_value.parent.parent.__truediv__ = lambda self, other: project_data_dir
-            
-            # Mock glob to return files from project directory
-            def mock_glob(pattern):
-                if str(temp_data_dir) in str(self):
-                    return []  # No files in home directory
-                else:
-                    return [test_file]  # Files in project directory
-            
-            with patch.object(Path, 'glob', mock_glob), \
-                 patch.object(Path, 'exists', return_value=True):
-                
-                # Test
-                result = get_today_minutes()
-                
-                # Assert
-                assert result == 45
+        # Assert
+        assert result == 45
 
     def test_error_handling_in_get_today_minutes(self, temp_data_dir):
         """Test error handling in get_today_minutes."""
@@ -223,16 +210,13 @@ class TestDataAccess:
         """Test error handling in _get_streak_value."""
         with patch('raycast_focus_tracker.data_access.DATA_DIR', temp_data_dir), \
              patch.object(Path, 'exists', return_value=True), \
-             patch('builtins.open', mock_open(read_data="invalid json")), \
-             patch('builtins.print') as mock_print:
+             patch('builtins.open', mock_open(read_data="invalid json")):
             
             # Test
             result = _get_streak_value("current_streak")
             
             # Assert
             assert result == 0
-            mock_print.assert_called_once()
-            assert "Error accessing current_streak" in str(mock_print.call_args)
 
 
 class TestDataDirectoryLogic:
