@@ -9,8 +9,8 @@ This is a **Raycast Focus Session Tracker** that monitors macOS focus sessions, 
 ## Architecture
 
 **Data Flow Pipeline:**
-1. `focus-tracker.sh` → Captures Raycast logs via `log stream` command
-2. `log_to_json.py` → Parses raw logs into structured JSON 
+1. `focus-tracker.sh` → Captures Raycast logs to file via `log stream --level debug` (WORKING)
+2. `log_to_json.py` → Parses raw logs into structured JSON
 3. `data_access.py` → Provides clean API for accessing focus data
 4. `streak_calculation.py` → Calculates current/longest streaks
 5. `menuBar.py` → macOS menubar app displaying stats and heatmaps

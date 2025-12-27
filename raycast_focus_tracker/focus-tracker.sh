@@ -54,30 +54,22 @@ trap cleanup TERM INT
 
 echo "$(date): Focus tracker started" >> "$TRACKER_LOG"
 
-# Main log capture loop
-while true; do
-    {
-        # Define file paths for daily logs and JSON output
-        DAILY_LOG_FILE="$LOG_DIR/focus.$(date +%Y-%m-%d).log"
-        JSON_OUTPUT_FILE="$DATA_DIR/focus.$(date +%Y-%m-%d).json"
+# Main logging loop - capture Raycast focus logs to file
+# Raycast supports file logging via macOS log stream with debug level
+echo "$(date): Starting Raycast focus log capture..." >> "$TRACKER_LOG"
 
-        # Stream Raycast logs and filter for focus session events
-        log stream \
-            --predicate 'subsystem == "com.raycast.macos"' \
-            --level debug \
-            --style compact | \
-        grep --line-buffered -E "(focus] (Start|Cancel|Complete|Stop|Pause|Restoring|Focus session activity summary)|Goal:|Duration:|Start date:|Pauses Count:|Block Events Count:|Snooze Events Count:|Source:|Title:|Filter Mode:)" | \
-        while read -r line; do
-            # Write each matching line to the daily log file
-            echo "$line" >> "$DAILY_LOG_FILE"
-            
-            # Process the entire log file to update JSON data in real-time
-            # This ensures the data is always up-to-date
-            python3 "$SCRIPT_DIR/log_to_json.py" "$DAILY_LOG_FILE" "$JSON_OUTPUT_FILE" 2>> "$TRACKER_LOG"
-        done
-    } 2>> "$TRACKER_LOG"
-    
-    # Log restart and brief pause before retrying
-    echo "$(date): Log stream ended, restarting..." >> "$TRACKER_LOG"
-    sleep 5
+/usr/bin/log stream --predicate 'subsystem == "com.raycast.macos"' --level debug --style compact | while read -r line; do
+    # Get current date for log file naming
+    CURRENT_DATE=$(date +%Y-%m-%d)
+
+    # Define file paths for daily logs
+    DAILY_LOG_FILE="$LOG_DIR/focus.$CURRENT_DATE.log"
+
+    # Write the log line to the daily file
+    echo "$line" >> "$DAILY_LOG_FILE"
+
+    # Log that we captured a line (less frequently to avoid spam)
+    if [[ $((RANDOM % 100)) -eq 0 ]]; then
+        echo "$(date): Captured log lines for $CURRENT_DATE" >> "$TRACKER_LOG"
+    fi
 done

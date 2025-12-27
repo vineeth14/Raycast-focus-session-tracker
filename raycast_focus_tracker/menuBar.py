@@ -147,36 +147,47 @@ class FocusApp(rumps.App):
         return submenu
 
     def _parse_latest_logs(self):
-        """Parse any available log data to JSON files."""
+        """Parse newly captured Raycast focus logs from file logging and update focus data."""
         try:
-            # Look for logs in project directory first, then home directory
+            # Parse newly captured logs from the focus-tracker.sh log stream
             project_log_dir = self.script_dir.parent / "logs"
-            home_log_dir = Path.home() / ".raycast-focus-tracker" / "logs"
-            
-            # Find all log files, not just today's
             log_files = []
-            output_dir = None
-            
-            # Prefer project directory logs and output to project directory
+
             if project_log_dir.exists():
-                log_files = list(project_log_dir.glob("focus.*.log"))
-                output_dir = self.script_dir.parent / "data"
-            elif home_log_dir.exists():
-                log_files = list(home_log_dir.glob("focus.*.log"))
-                output_dir = self.data_dir
-            
+                log_files.extend(list(project_log_dir.glob("focus.*.log")))
+
+            # Always output to the primary data directory
+            output_dir = self.data_dir
+
             if log_files and output_dir:
                 # Ensure output directory exists
                 output_dir.mkdir(parents=True, exist_ok=True)
-                
+
                 # Import and run log parser
                 from .log_to_json import parse_log_file_to_separate_dates
-                
+
                 # --- Parse all available log files ---
                 for log_file in log_files:
                     try:
+                        # For today's log file, force reprocessing to handle continuous log streaming
+                        from datetime import datetime
+                        log_date = datetime.now().strftime("%Y-%m-%d")
+                        if f"focus.{log_date}.log" in str(log_file):
+                            print(f"Forcing reprocessing of today's live log: {log_file}")
+                            # Temporarily clear parser state for this file to allow reprocessing
+                            import json
+                            state_file = Path.home() / ".raycast-focus-tracker" / ".parser_state.json"
+                            if state_file.exists():
+                                with open(state_file, 'r') as f:
+                                    state = json.load(f)
+                                keys_to_remove = [k for k in state.keys() if str(log_file) in k or str(log_file.name) in k]
+                                for key in keys_to_remove:
+                                    del state[key]
+                                with open(state_file, 'w') as f:
+                                    json.dump(state, f, indent=2)
+
                         result = parse_log_file_to_separate_dates(str(log_file), str(output_dir))
-                        
+
                         if result:
                             for date, json_file in result.items():
                                 print(f"Parsed {date} data from {log_file} -> {json_file}")
@@ -185,9 +196,9 @@ class FocusApp(rumps.App):
                     except Exception as e:
                         print(f"Error parsing log file {log_file}: {e}")
             else:
-                print(f"No log files found")
+                print("No historical log files found")
         except Exception as e:
-            print(f"Error parsing logs: {e}")
+            print(f"Error monitoring Raycast databases: {e}")
     
     # Removed _update_menu_data() and _update_submenu() methods
     # Now using full menu rebuild with create_menu() for all refreshes

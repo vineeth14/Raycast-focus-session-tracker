@@ -202,7 +202,7 @@ def clean_stale_active_sessions(data):
 
 def handle_session_start(line, data, current_session_data):
     """Handle 'Start focus session' log line.
-    
+
     Args:
         line (str): Log line containing session start
         data (dict): Main data structure
@@ -211,10 +211,10 @@ def handle_session_start(line, data, current_session_data):
     timestamp = extract_timestamp(line)
     if not timestamp:
         return
-    
+
     date_key = get_date_from_timestamp(timestamp)
     initialize_day_data(data, date_key)
-    
+
     current_session_data.update({
         'timestamp': timestamp,
         'date_key': date_key,
@@ -279,8 +279,6 @@ def handle_session_end(line, data, current_session_data):
     initialize_day_data(data, date_key)
     
     recent_goal = current_session_data.get('goal')
-    
-    # Debug print
     
     # Skip if session already completed
     if _session_end_already_processed(data[date_key], recent_goal, timestamp):
@@ -566,14 +564,14 @@ def parse_log_file(log_file_path, json_output_path):
         print(f"Log file not found: {log_file_path}")
         return None
 
+    print(f"Processing lines {last_processed_line + 1} to {total_lines}...")
+
+    data = load_or_create_json(json_output_path)
+
     # If file has more lines than we processed last time, process the new lines
     if total_lines <= last_processed_line:
         print("No new lines to process.")
         return data
-
-    print(f"Processing lines {last_processed_line + 1} to {total_lines}...")
-
-    data = load_or_create_json(json_output_path)
 
     # Clean up stale active sessions from previous parsing
     clean_stale_active_sessions(data)
@@ -695,10 +693,10 @@ def parse_log_file_to_separate_dates(log_file_path, output_dir):
         result[date] = str(json_file)
     
     # Clean up temp file
-    try:
-        Path(temp_json).unlink(missing_ok=True)
-    except:
-        pass
+    # try:
+    #     Path(temp_json).unlink(missing_ok=True)
+    # except:
+    #     pass
     
     return result
 
