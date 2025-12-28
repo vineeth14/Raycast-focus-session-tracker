@@ -26,6 +26,10 @@ if __name__ == "__main__":
         get_longest_streak,
         get_today_by_goal,
         get_today_minutes,
+        get_week_minutes,
+        get_week_by_goal,
+        get_month_minutes,
+        get_month_by_goal,
         DATA_DIR,
     )
     from streak_calculation import update_streaks
@@ -36,6 +40,10 @@ else:
         get_longest_streak,
         get_today_by_goal,
         get_today_minutes,
+        get_week_minutes,
+        get_week_by_goal,
+        get_month_minutes,
+        get_month_by_goal,
         DATA_DIR,
     )
     from .streak_calculation import update_streaks
@@ -76,7 +84,13 @@ class FocusApp(rumps.App):
             
             self.menu.add(rumps.MenuItem("Today's Time", callback=None))
             self.menu["Today's Time"].update(self._build_time_submenu())
-            
+
+            self.menu.add(rumps.MenuItem("This Week", callback=None))
+            self.menu["This Week"].update(self._build_week_submenu())
+
+            self.menu.add(rumps.MenuItem("This Month", callback=None))
+            self.menu["This Month"].update(self._build_month_submenu())
+
             self.menu.add(rumps.MenuItem("Time by Goal", callback=None))
             self.menu["Time by Goal"].update(self._build_goals_submenu())
             
@@ -137,6 +151,60 @@ class FocusApp(rumps.App):
                     f"= {hours}h {remaining_mins}m", callback=self._do_nothing
                 )
             )
+
+        return submenu
+
+    def _build_week_submenu(self):
+        """Build this week's time information submenu."""
+        minutes = get_week_minutes()
+        hours, remaining_mins = divmod(minutes, 60)
+
+        submenu = [
+            rumps.MenuItem(f"Total: {minutes} minutes", callback=self._do_nothing)
+        ]
+
+        if hours > 0:
+            submenu.append(
+                rumps.MenuItem(
+                    f"= {hours}h {remaining_mins}m", callback=self._do_nothing
+                )
+            )
+
+        # Add goal breakdown
+        goals = get_week_by_goal()
+        if goals:
+            submenu.append(rumps.separator)
+            for goal, mins in goals.items():
+                submenu.append(
+                    rumps.MenuItem(f"{goal}: {mins}m", callback=self._do_nothing)
+                )
+
+        return submenu
+
+    def _build_month_submenu(self):
+        """Build this month's time information submenu."""
+        minutes = get_month_minutes()
+        hours, remaining_mins = divmod(minutes, 60)
+
+        submenu = [
+            rumps.MenuItem(f"Total: {minutes} minutes", callback=self._do_nothing)
+        ]
+
+        if hours > 0:
+            submenu.append(
+                rumps.MenuItem(
+                    f"= {hours}h {remaining_mins}m", callback=self._do_nothing
+                )
+            )
+
+        # Add goal breakdown
+        goals = get_month_by_goal()
+        if goals:
+            submenu.append(rumps.separator)
+            for goal, mins in goals.items():
+                submenu.append(
+                    rumps.MenuItem(f"{goal}: {mins}m", callback=self._do_nothing)
+                )
 
         return submenu
 

@@ -83,7 +83,13 @@ def update_streaks(daily_data, streaks_path="data/streaks.json"):
         
     if should_save:
         save_streaks(streaks, streaks_path)
-    
+        # Send streak notifications
+        try:
+            from .notifications import check_and_notify_streak
+        except ImportError:
+            from notifications import check_and_notify_streak
+        check_and_notify_streak(current_streak, previous_current, streaks["longest_streak"])
+
     return streaks
 
 
