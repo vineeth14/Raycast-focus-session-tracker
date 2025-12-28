@@ -24,10 +24,10 @@ STATE_FILE = Path.home() / ".raycast-focus-tracker" / ".parser_state.json"
 
 def load_or_create_json(json_path):
     """Load existing JSON data or create empty structure.
-    
+
     Args:
         json_path (str): Path to JSON file
-        
+
     Returns:
         dict: Existing data or empty dict
     """
@@ -96,11 +96,11 @@ def extract_timestamp(line):
 
 def calculate_duration(start_time, end_time):
     """Calculate duration in minutes between two timestamps.
-    
+
     Args:
         start_time (str): Start timestamp
         end_time (str): End timestamp
-        
+
     Returns:
         int: Duration in minutes, minimum 1 for completed sessions
     """
@@ -236,7 +236,7 @@ def extract_goal(line, current_session_data):
 
 def add_to_active_sessions(data, current_session_data):
     """Add session to active_sessions once we have goal.
-    
+
     Args:
         data (dict): Main data structure
         current_session_data (dict): Session tracking data
@@ -244,18 +244,18 @@ def add_to_active_sessions(data, current_session_data):
     required_keys = ['goal', 'date_key', 'start_time']
     if not all(k in current_session_data for k in required_keys):
         return
-    
+
     goal = current_session_data['goal']
     date_key = current_session_data['date_key']
     start_time = current_session_data['start_time']
-    
+
     # Skip if session already processed
     if _session_already_exists(data[date_key], goal, start_time):
         return
-    
+
     # Use goal + start_time as unique key for active sessions
     session_key = f"{goal}_{start_time}"
-    
+
     # Add to active sessions with unique key
     data[date_key]['active_sessions'][session_key] = {
         'goal': goal,
@@ -265,7 +265,7 @@ def add_to_active_sessions(data, current_session_data):
 
 def handle_session_end(line, data, current_session_data):
     """Handle 'Complete focus session' or 'Cancel focus session' lines.
-    
+
     Args:
         line (str): Log line containing session end
         data (dict): Main data structure
@@ -274,21 +274,21 @@ def handle_session_end(line, data, current_session_data):
     timestamp = extract_timestamp(line)
     if not timestamp:
         return
-    
+
     date_key = get_date_from_timestamp(timestamp)
     initialize_day_data(data, date_key)
-    
+
     recent_goal = current_session_data.get('goal')
-    
+
     # Skip if session already completed
     if _session_end_already_processed(data[date_key], recent_goal, timestamp):
         return
-    
+
     # Find and complete active session
     session_to_complete, goal_key = _find_active_session(
         data[date_key], recent_goal
     )
-    
+
     if session_to_complete:
         _complete_session(session_to_complete, timestamp, line)
         data[date_key]['items'].append(session_to_complete)
@@ -296,8 +296,6 @@ def handle_session_end(line, data, current_session_data):
         completed_goal = session_to_complete.get('goal')
         current_session_data.clear()
         current_session_data['last_completed_goal'] = completed_goal
-    else:
-        pass  # No active session found
 
 def handle_activity_summary_line(line, data, current_session_data):
     """Handle activity summary lines (Start date, Pauses Count, etc.).
@@ -350,17 +348,12 @@ def update_last_session_stat(data, current_session_data, stat_name, value):
                     return
 
 def update_last_session_duration(data, current_session_data, activity_minutes):
-    """Update the most recent session with activity summary duration.
-    
-    Args:
-        data (dict): Main data structure
-        current_session_data (dict): Session tracking data
-        activity_minutes (int): Duration from activity summary in minutes
-    """
+    """Update the most recent session with activity summary duration."""
     goal = current_session_data.get('last_completed_goal')
     if not goal:
         return
-    
+
+    # Find the most recent session with this goal
     for date_key in reversed(list(data.keys())):
         if 'items' in data[date_key]:
             for session in reversed(data[date_key]['items']):
@@ -373,26 +366,26 @@ def update_last_session_duration(data, current_session_data, activity_minutes):
 
 def _recalculate_totals(data, date_key):
     """Recalculate total_time_minutes and time_per_goal for a specific date.
-    
+
     Args:
         data (dict): Main data structure
         date_key (str): Date key to recalculate
     """
     if date_key not in data or 'items' not in data[date_key]:
         return
-    
+
     total_time = 0
     time_per_goal = {}
-    
+
     for item in data[date_key]['items']:
         if _should_count_session(item):
             duration = item.get('actual_duration', 0)
             goal = item.get('goal', 'unknown')
-            
+
             total_time += duration
             time_per_goal[goal] = time_per_goal.get(goal, 0) + duration
-    
-    # Update the data structure
+
+# Update the data structure
     data[date_key]['total_time_minutes'] = total_time
     data[date_key]['time_per_goal'] = time_per_goal
 
@@ -527,7 +520,7 @@ def _should_count_session(item):
 
 def save_json(data, json_path):
     """Save data to JSON file with pretty formatting.
-    
+
     Args:
         data (dict): Data to save
         json_path (str): Output file path
@@ -659,26 +652,14 @@ def parse_log_file_to_separate_dates(log_file_path, output_dir):
             try:
                 with open(json_file, 'r') as f:
                     existing_data = json.load(f)
-                
+
                 # Only keep data for this specific date
                 if date in existing_data:
-                    # Merge items and update totals
-                    existing_items = existing_data[date].get('items', [])
+                    # Use the newly parsed data, which should be complete
+                    # Don't merge with existing data as the parsing processes all lines
                     new_items = day_data.get('items', [])
-                    
-                    # Combine and deduplicate items based on start_time
-                    all_items = existing_items + new_items
-                    seen_start_times = set()
-                    unique_items = []
-                    
-                    for item in all_items:
-                        if item['start_time'] not in seen_start_times:
-                            unique_items.append(item)
-                            seen_start_times.add(item['start_time'])
-                    
-                    # Update the day data with unique items
-                    single_date_data[date]['items'] = unique_items
-                    
+                    single_date_data[date]['items'] = new_items
+
             except Exception as e:
                 print(f"Warning: Could not merge existing data for {date}: {e}")
         
@@ -703,7 +684,7 @@ def parse_log_file_to_separate_dates(log_file_path, output_dir):
 
 def _process_log_line(line, data, current_session_data):
     """Process a single log line.
-    
+
     Args:
         line (str): Log line to process
         data (dict): Main data structure
@@ -718,12 +699,12 @@ def _process_log_line(line, data, current_session_data):
             "Focus session activity summary": _handle_activity_summary_start,
             "Restoring stored form state": _handle_form_state_reset
         }
-        
+
         # Check for activity summary lines first
         if current_session_data.get('in_activity_summary'):
             handle_activity_summary_line(line, data, current_session_data)
             return
-        
+
         # Process other line types
         matched = False
         for key, handler in line_handlers.items():

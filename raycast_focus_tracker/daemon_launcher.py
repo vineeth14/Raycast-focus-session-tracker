@@ -39,8 +39,10 @@ def main():
 
     # Start the menuBar app in background
     try:
-        # Use python -m to avoid import issues
-        cmd = ['python3', '-m', 'raycast_focus_tracker.menuBar']
+        # Run as a script to avoid relative import issues
+        import sys
+        menubar_path = script_dir / "menuBar.py"
+        cmd = [sys.executable, str(menubar_path)]
         
         with open(log_file, 'a') as f:
             process = subprocess.Popen(

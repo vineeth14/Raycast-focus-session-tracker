@@ -7,22 +7,41 @@ Provides access to heatmap visualization and real-time data refresh.
 import json
 import os
 import subprocess
+import sys
 import time
 import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# Handle running as a script vs module
+if __name__ == "__main__":
+    # Add the current directory to sys.path for imports
+    current_dir = Path(__file__).parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+
+    # Use absolute imports when running as script
+    from data_access import (
+        get_current_streak,
+        get_longest_streak,
+        get_today_by_goal,
+        get_today_minutes,
+        DATA_DIR,
+    )
+    from streak_calculation import update_streaks
+else:
+    # Use relative imports when run as module
+    from .data_access import (
+        get_current_streak,
+        get_longest_streak,
+        get_today_by_goal,
+        get_today_minutes,
+        DATA_DIR,
+    )
+    from .streak_calculation import update_streaks
+
 import lesley
 import rumps
-
-from .data_access import (
-    get_current_streak,
-    get_longest_streak,
-    get_today_by_goal,
-    get_today_minutes,
-    DATA_DIR,
-)
-from .streak_calculation import update_streaks
 
 
 class FocusApp(rumps.App):
@@ -150,11 +169,18 @@ class FocusApp(rumps.App):
         """Parse newly captured Raycast focus logs from file logging and update focus data."""
         try:
             # Parse newly captured logs from the focus-tracker.sh log stream
+            # Search both project and home directories for log files
             project_log_dir = self.script_dir.parent / "logs"
+            home_log_dir = Path.home() / ".raycast-focus-tracker" / "logs"
             log_files = []
 
+            # Check project directory (development mode)
             if project_log_dir.exists():
                 log_files.extend(list(project_log_dir.glob("focus.*.log")))
+
+            # Check home directory (installed mode)
+            if home_log_dir.exists():
+                log_files.extend(list(home_log_dir.glob("focus.*.log")))
 
             # Always output to the primary data directory
             output_dir = self.data_dir
@@ -164,7 +190,10 @@ class FocusApp(rumps.App):
                 output_dir.mkdir(parents=True, exist_ok=True)
 
                 # Import and run log parser
-                from .log_to_json import parse_log_file_to_separate_dates
+                if __name__ == "__main__":
+                    from log_to_json import parse_log_file_to_separate_dates
+                else:
+                    from .log_to_json import parse_log_file_to_separate_dates
 
                 # --- Parse all available log files ---
                 for log_file in log_files:
@@ -174,17 +203,11 @@ class FocusApp(rumps.App):
                         log_date = datetime.now().strftime("%Y-%m-%d")
                         if f"focus.{log_date}.log" in str(log_file):
                             print(f"Forcing reprocessing of today's live log: {log_file}")
-                            # Temporarily clear parser state for this file to allow reprocessing
-                            import json
+                            # Delete the entire parser state file to force reprocessing
                             state_file = Path.home() / ".raycast-focus-tracker" / ".parser_state.json"
                             if state_file.exists():
-                                with open(state_file, 'r') as f:
-                                    state = json.load(f)
-                                keys_to_remove = [k for k in state.keys() if str(log_file) in k or str(log_file.name) in k]
-                                for key in keys_to_remove:
-                                    del state[key]
-                                with open(state_file, 'w') as f:
-                                    json.dump(state, f, indent=2)
+                                state_file.unlink()
+                            print("Deleted parser state file to force reprocessing")
 
                         result = parse_log_file_to_separate_dates(str(log_file), str(output_dir))
 
