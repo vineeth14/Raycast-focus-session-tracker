@@ -48,21 +48,12 @@ def check_and_notify_streak(current, previous, longest):
         previous (int): Previous streak count (before this update)
         longest (int): Longest streak ever achieved
     """
-    # First day of a new streak
-    if current == 1 and previous == 0:
-        send_notification(
-            "Focus Streak Started!",
-            "You started a new streak. Keep it going!",
-            sound=True
-        )
-        return
-
     # Streak broken
     if current == 0 and previous > 0:
         quote = random.choice(MOTIVATIONAL_QUOTES)
         send_notification(
-            "Streak Reset",
-            quote,
+            "Raycast Focus Tracker",
+            f"Streak Reset - {quote}",
             sound=False
         )
         return
@@ -70,8 +61,8 @@ def check_and_notify_streak(current, previous, longest):
     # New personal record
     if current > longest and current > 1:
         send_notification(
-            "New Personal Record!",
-            f"{current}-day streak! You've beaten your best!",
+            "Raycast Focus Tracker",
+            f"New Record! {current}-day streak - You've beaten your best!",
             sound=True
         )
         return
@@ -79,8 +70,8 @@ def check_and_notify_streak(current, previous, longest):
     # Milestone reached
     if current in MILESTONES and current > previous:
         send_notification(
-            f"{current}-Day Streak!",
-            f"Amazing! You've maintained focus for {current} days!",
+            "Raycast Focus Tracker",
+            f"{current}-Day Streak! You've maintained focus for {current} days!",
             sound=True
         )
         return

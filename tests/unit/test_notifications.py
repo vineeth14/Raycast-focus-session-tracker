@@ -67,14 +67,12 @@ class TestCheckAndNotifyStreak:
     """Test streak notification logic."""
 
     @patch('raycast_focus_tracker.notifications.send_notification')
-    def test_first_day_streak(self, mock_notify):
-        """Test notification for first day of a new streak."""
+    def test_first_day_streak_no_notification(self, mock_notify):
+        """Test that no notification is sent for first day of a new streak."""
         check_and_notify_streak(current=1, previous=0, longest=5)
 
-        mock_notify.assert_called_once()
-        args = mock_notify.call_args[0]
-        assert "Started" in args[0]
-        assert mock_notify.call_args[1]['sound'] is True
+        # No daily notifications for starting a streak
+        mock_notify.assert_not_called()
 
     @patch('raycast_focus_tracker.notifications.send_notification')
     def test_streak_broken(self, mock_notify):
@@ -83,9 +81,10 @@ class TestCheckAndNotifyStreak:
 
         mock_notify.assert_called_once()
         args = mock_notify.call_args[0]
-        assert "Reset" in args[0]
-        # Message should be one of the motivational quotes
-        assert args[1] in MOTIVATIONAL_QUOTES
+        assert args[0] == "Raycast Focus Tracker"
+        assert "Streak Reset" in args[1]
+        # Message should contain one of the motivational quotes
+        assert any(quote in args[1] for quote in MOTIVATIONAL_QUOTES)
 
     @patch('raycast_focus_tracker.notifications.send_notification')
     def test_new_record(self, mock_notify):
@@ -94,7 +93,8 @@ class TestCheckAndNotifyStreak:
 
         mock_notify.assert_called_once()
         args = mock_notify.call_args[0]
-        assert "Record" in args[0]
+        assert args[0] == "Raycast Focus Tracker"
+        assert "New Record" in args[1]
         assert "11" in args[1]
 
     @patch('raycast_focus_tracker.notifications.send_notification')
@@ -104,7 +104,8 @@ class TestCheckAndNotifyStreak:
 
         mock_notify.assert_called_once()
         args = mock_notify.call_args[0]
-        assert "7" in args[0]
+        assert args[0] == "Raycast Focus Tracker"
+        assert "7" in args[1]
 
     @patch('raycast_focus_tracker.notifications.send_notification')
     def test_no_notification_for_regular_day(self, mock_notify):
