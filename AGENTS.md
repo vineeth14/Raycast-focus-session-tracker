@@ -53,10 +53,16 @@ Raycast App → focus-tracker.sh → log_to_json.py → data_access.py → menuB
 ## Key Functions
 
 ### log_to_json.py
-- `parse_log_file(log_path, json_path)` - Main parser entry point
+- `parse_log_file(log_path, json_path, force_full_reparse=False)` - Main parser entry point
+  - **Today's logs always get full reparse** to prevent session context corruption
+  - Uses parser state file (`~/.raycast-focus-tracker/.parser_state.json`) for incremental parsing of old logs
 - `handle_session_start/end()` - Process session lifecycle
 - `recalculate_daily_totals()` - Aggregate time per goal
 - `_should_count_session()` - Returns true if completed and not cancelled
+
+### notifications.py
+- `send_notification(title, message, sound)` - Send macOS notification
+- `check_and_notify_streak(current, previous, longest)` - Notify on milestones/records/resets
 
 ### data_access.py
 - `get_today_minutes()` - Today's total focus time
@@ -71,6 +77,7 @@ Raycast App → focus-tracker.sh → log_to_json.py → data_access.py → menuB
 
 - Development: `./logs/`, `./data/`
 - Installed: `~/.raycast-focus-tracker/logs/`, `~/.raycast-focus-tracker/data/`
+- Parser state: `~/.raycast-focus-tracker/.parser_state.json` (tracks lines processed per log file)
 
 ## Log Format (from Raycast)
 
@@ -97,3 +104,10 @@ raycast-tracker-stop  # Stop all tracker processes
 
 - `rumps` - macOS menu bar framework
 - `lesley` - Calendar heatmap generation
+
+## Known Issues Fixed
+
+### Parser Session Corruption (Fixed 2025-12-30)
+**Problem:** Incremental parsing split session starts/completions across parsing runs, causing wrong session matching and incorrect time totals.
+
+**Fix:** Today's log file always gets full reparse from line 1, ensuring session context integrity. Old logs still use incremental parsing for performance.

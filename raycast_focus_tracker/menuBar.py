@@ -81,18 +81,18 @@ class FocusApp(rumps.App):
             # Add submenus
             self.menu.add(rumps.MenuItem("Streak Data", callback=None))
             self.menu["Streak Data"].update(self._build_streak_submenu())
-            
+
             self.menu.add(rumps.MenuItem("Today's Time", callback=None))
             self.menu["Today's Time"].update(self._build_time_submenu())
+
+            self.menu.add(rumps.MenuItem("Time by Goal", callback=None))
+            self.menu["Time by Goal"].update(self._build_goals_submenu())
 
             self.menu.add(rumps.MenuItem("This Week", callback=None))
             self.menu["This Week"].update(self._build_week_submenu())
 
             self.menu.add(rumps.MenuItem("This Month", callback=None))
             self.menu["This Month"].update(self._build_month_submenu())
-
-            self.menu.add(rumps.MenuItem("Time by Goal", callback=None))
-            self.menu["Time by Goal"].update(self._build_goals_submenu())
             
             # Add separator
             self.menu.add(rumps.separator)

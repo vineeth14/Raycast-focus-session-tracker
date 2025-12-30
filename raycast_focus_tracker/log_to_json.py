@@ -534,20 +534,32 @@ def save_json(data, json_path):
     except TypeError as e:
         print(f"Warning: Data serialization error for {json_path}: {e}")
 
-def parse_log_file(log_file_path, json_output_path):
+def parse_log_file(log_file_path, json_output_path, force_full_reparse=False):
     """Main function to parse log file and convert to JSON structure.
-    
+
     Args:
         log_file_path (str): Path to input log file
         json_output_path (str): Path to output JSON file
-        
+        force_full_reparse (bool): If True, reparse from line 1 ignoring state
+
     Returns:
         dict or None: Parsed data or None if failed
     """
     print(f"Parsing {log_file_path} -> {json_output_path}")
-    
+
+    # Check if this is today's log file - always do full reparse for today
+    # to avoid session context being split across incremental parsing runs
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    is_today_log = today_str in str(log_file_path)
+
     parser_state = load_parser_state(STATE_FILE)
-    last_processed_line = parser_state.get(log_file_path, 0)
+
+    if force_full_reparse or is_today_log:
+        last_processed_line = 0
+        if is_today_log:
+            print(f"Today's log detected - doing full reparse to ensure session integrity")
+    else:
+        last_processed_line = parser_state.get(log_file_path, 0)
 
     # Get current total lines in file
     try:
@@ -559,7 +571,11 @@ def parse_log_file(log_file_path, json_output_path):
 
     print(f"Processing lines {last_processed_line + 1} to {total_lines}...")
 
-    data = load_or_create_json(json_output_path)
+    # For full reparse, start with empty data; otherwise load existing
+    if force_full_reparse or is_today_log:
+        data = {}
+    else:
+        data = load_or_create_json(json_output_path)
 
     # If file has more lines than we processed last time, process the new lines
     if total_lines <= last_processed_line:

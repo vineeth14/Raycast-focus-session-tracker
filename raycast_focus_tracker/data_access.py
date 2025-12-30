@@ -36,16 +36,16 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def get_today_minutes(search_dirs=None):
-    """Get today's total focus minutes.
-    
+    """Get today's total focus minutes including active sessions.
+
     Args:
         search_dirs (list, optional): List of directories to search. Defaults to None.
-    
+
     Returns:
-        int: Total minutes focused today, 0 if no data or error.
+        int: Total minutes focused today (completed + active), 0 if no data or error.
     """
     today = datetime.now().strftime("%Y-%m-%d")
-    
+
     if search_dirs is None:
         search_dirs = [
             DATA_DIR,
@@ -53,7 +53,7 @@ def get_today_minutes(search_dirs=None):
             Path.home() / ".raycast-focus-tracker" / "data",  # Home directory
             Path(__file__).parent / "data"  # Package data directory
         ]
-    
+
     try:
         for data_dir in search_dirs:
             if not data_dir.exists():
@@ -62,13 +62,29 @@ def get_today_minutes(search_dirs=None):
                 try:
                     with open(focus_file, "r") as f:
                         data = json.load(f)
-                        if today in data and "total_time_minutes" in data[today]:
-                            return data[today].get("total_time_minutes", 0)
+                        if today in data:
+                            completed_minutes = data[today].get("total_time_minutes", 0)
+
+                            # Add time from active sessions
+                            active_minutes = 0
+                            active_sessions = data[today].get("active_sessions", {})
+                            now = datetime.now()
+                            for session in active_sessions.values():
+                                start_str = session.get("start_time", "")
+                                if start_str:
+                                    try:
+                                        start_time = datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S.%f")
+                                        elapsed = (now - start_time).total_seconds() / 60
+                                        active_minutes += int(elapsed)
+                                    except ValueError:
+                                        pass
+
+                            return completed_minutes + active_minutes
                 except (json.JSONDecodeError, KeyError, PermissionError):
                     continue  # Skip invalid files
     except Exception as e:
         print(f"Error accessing today's minutes: {e}")
-    
+
     return 0
 
 
