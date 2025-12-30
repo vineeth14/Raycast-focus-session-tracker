@@ -268,14 +268,25 @@ class FocusApp(rumps.App):
                     try:
                         # For today's log file, force reprocessing to handle continuous log streaming
                         from datetime import datetime
+                        import json
                         log_date = datetime.now().strftime("%Y-%m-%d")
                         if f"focus.{log_date}.log" in str(log_file):
                             print(f"Forcing reprocessing of today's live log: {log_file}")
-                            # Delete the entire parser state file to force reprocessing
+                            # Only clear today's log entry from parser state, not the entire file
                             state_file = Path.home() / ".raycast-focus-tracker" / ".parser_state.json"
                             if state_file.exists():
-                                state_file.unlink()
-                            print("Deleted parser state file to force reprocessing")
+                                try:
+                                    with open(state_file, 'r') as f:
+                                        state = json.load(f)
+                                    # Remove only today's log file entry
+                                    log_file_str = str(log_file)
+                                    if log_file_str in state:
+                                        del state[log_file_str]
+                                        with open(state_file, 'w') as f:
+                                            json.dump(state, f, indent=2)
+                                        print(f"Cleared parser state for today's log: {log_file}")
+                                except Exception as e:
+                                    print(f"Warning: Could not update parser state: {e}")
 
                         result = parse_log_file_to_separate_dates(str(log_file), str(output_dir))
 

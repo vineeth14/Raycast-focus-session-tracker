@@ -121,15 +121,15 @@ class TestStreakCalculation:
             "2025-08-10": {"total_time_minutes": 30},
             "2025-08-11": {"total_time_minutes": 45},
             "2025-08-12": {"total_time_minutes": 60},
-            "2025-08-13": {"total_time_minutes": 0}   # Today has no focus
+            "2025-08-13": {"total_time_minutes": 0}   # Today has no focus yet
         }
-        
+
         # Test
         today = date(2025, 8, 13)
         result = _calculate_current_streak(daily_data, today=today)
-        
-        # Assert
-        assert result == 0  # Streak is broken
+
+        # Assert - today's 0 is ignored, streak counts from yesterday
+        assert result == 3  # Aug 10, 11, 12
 
     def test_calculate_current_streak_empty_data(self):
         """Test calculating current streak with empty data."""
@@ -148,15 +148,15 @@ class TestStreakCalculation:
         daily_data = {
             "2025-08-10": {"time_per_goal": {"coding": 30}},  # Missing total_time_minutes
             "2025-08-11": {"total_time_minutes": 45},
-            "2025-08-12": {"total_time_minutes": 0}
+            "2025-08-12": {"total_time_minutes": 0}  # Today has no focus yet
         }
-        
+
         # Test
         today = date(2025, 8, 12)
         result = _calculate_current_streak(daily_data, today=today)
-        
-        # Assert
-        assert result == 0  # Streak broken by 2025-08-12 having 0 minutes
+
+        # Assert - today's 0 is ignored, streak counts from Aug 11
+        assert result == 2  # Aug 10 (via time_per_goal) and Aug 11
 
     def test_calculate_current_streak_unsorted_dates(self):
         """Test calculating current streak with unsorted date keys."""
@@ -312,7 +312,7 @@ class TestStreakUpdating:
 
     @patch('datetime.datetime')
     def test_update_streaks_streak_broken(self, mock_datetime, temp_data_dir):
-        """Test updating streaks when current streak is broken."""
+        """Test updating streaks when current streak is broken by a past day."""
         # Setup
         mock_datetime.now.return_value.date.return_value = date(2025, 8, 13)
         mock_datetime.strptime = MagicMock(wraps=datetime.strptime)
@@ -321,19 +321,19 @@ class TestStreakUpdating:
         initial_streaks = {"current_streak": 5, "longest_streak": 10}
         with open(streaks_file, 'w') as f:
             json.dump(initial_streaks, f)
-        
+
         daily_data = {
             "2025-08-10": {"total_time_minutes": 30},
-            "2025-08-11": {"total_time_minutes": 0},   # Streak broken
+            "2025-08-11": {"total_time_minutes": 0},   # Streak broken here
             "2025-08-12": {"total_time_minutes": 60},
-            "2025-08-13": {"total_time_minutes": 0}    # Today also zero
+            "2025-08-13": {"total_time_minutes": 0}    # Today (ignored)
         }
-        
+
         # Test
         result = update_streaks(daily_data, str(streaks_file))
-        
-        # Assert
-        assert result["current_streak"] == 0
+
+        # Assert - streak is 1 (only Aug 12), because Aug 11 has 0 minutes
+        assert result["current_streak"] == 1
         assert result["longest_streak"] == 10  # Unchanged
 
     @patch('datetime.datetime')

@@ -95,58 +95,85 @@ def update_streaks(daily_data, streaks_path="data/streaks.json"):
 
 def _calculate_current_streak(daily_data, today=None):
     """Calculate current consecutive streak days.
-    
+
     Args:
         daily_data (dict): Daily focus data keyed by date
         today (date, optional): The current date. Defaults to None.
-        
+
     Returns:
         int: Current streak length in days
     """
     from datetime import datetime, timedelta
-    
+
     if not daily_data:
         return 0
-    
+
     if today is None:
         today = datetime.now().date()
-    
-    # Find the most recent date in our data
-    most_recent_date_str = max(daily_data.keys())
+
+    today_str = today.strftime("%Y-%m-%d")
+
+    # Find the most recent date with actual focus activity
+    # Count a day if it has: completed time > 0 OR active sessions
+    # This prevents "today with 0 completed minutes" from breaking the streak
+    dates_with_activity = []
+    for date_str, day_data in daily_data.items():
+        total_time = day_data.get("total_time_minutes")
+        if total_time is None:
+            time_per_goal = day_data.get("time_per_goal", {})
+            total_time = sum(time_per_goal.values()) if time_per_goal else 0
+
+        # Also check for active sessions (in-progress focus time)
+        active_sessions = day_data.get("active_sessions", {})
+        has_activity = total_time > 0 or len(active_sessions) > 0
+
+        if has_activity:
+            dates_with_activity.append(date_str)
+
+    if not dates_with_activity:
+        return 0
+
+    most_recent_date_str = max(dates_with_activity)
     most_recent_date = datetime.strptime(most_recent_date_str, "%Y-%m-%d").date()
-    
-    # Check if the streak is already broken
-    if (today - most_recent_date).days > 1:
+
+    # Check if the streak is already broken (more than 1 day gap)
+    # Allow for today having no time yet - check against yesterday too
+    days_since_last_focus = (today - most_recent_date).days
+    if days_since_last_focus > 1:
         return 0
 
     current_date = datetime.strptime(most_recent_date_str, "%Y-%m-%d")
     current_streak = 0
-    
+
     # Work backwards day by day checking calendar continuity
     while True:
         date_str = current_date.strftime("%Y-%m-%d")
-        
+
         # Check if we have data for this date
         if date_str in daily_data:
             day_data = daily_data[date_str]
             total_time = day_data.get("total_time_minutes")
-            
+
             # Handle case where total_time_minutes might be missing or None
             if total_time is None:
                 # If total_time_minutes is missing, calculate from time_per_goal
                 time_per_goal = day_data.get("time_per_goal", {})
                 total_time = sum(time_per_goal.values()) if time_per_goal else 0
-                
-            if total_time > 0:
+
+            # Also check for active sessions
+            active_sessions = day_data.get("active_sessions", {})
+            has_activity = total_time > 0 or len(active_sessions) > 0
+
+            if has_activity:
                 current_streak += 1
             else:
-                # Day exists but has 0 minutes - streak broken
+                # Day exists but has no activity - streak broken
                 break
         else:
-            # Missing day - treat as 0 minutes, streak broken
+            # Missing day - streak broken
             break
-        
+
         # Move to previous day
         current_date -= timedelta(days=1)
-    
+
     return current_streak
