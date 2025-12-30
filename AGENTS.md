@@ -104,10 +104,3 @@ raycast-tracker-stop  # Stop all tracker processes
 
 - `rumps` - macOS menu bar framework
 - `lesley` - Calendar heatmap generation
-
-## Known Issues Fixed
-
-### Parser Session Corruption (Fixed 2025-12-30)
-**Problem:** Incremental parsing split session starts/completions across parsing runs, causing wrong session matching and incorrect time totals.
-
-**Fix:** Today's log file always gets full reparse from line 1, ensuring session context integrity. Old logs still use incremental parsing for performance.
