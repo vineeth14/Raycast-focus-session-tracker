@@ -189,6 +189,41 @@ def get_week_by_goal(week_offset=0):
     return totals
 
 
+def get_week_by_day(week_offset=0):
+    """Get week's data broken down by day with goals.
+
+    Args:
+        week_offset (int): 0 for current week, -1 for last week, etc.
+
+    Returns:
+        list: List of dicts with day info: {date, day_name, total, goals}
+    """
+    from datetime import timedelta
+    today = datetime.now().date()
+    days_since_monday = today.weekday()
+    monday = today - timedelta(days=days_since_monday) + timedelta(weeks=week_offset)
+
+    days = []
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+    for i in range(7):
+        day = monday + timedelta(days=i)
+        if day > today:
+            break
+        date_str = day.strftime("%Y-%m-%d")
+        total = _get_day_minutes(date_str)
+        goals = _get_day_by_goal(date_str)
+
+        days.append({
+            "date": date_str,
+            "day_name": day_names[i],
+            "total": total,
+            "goals": goals
+        })
+
+    return days
+
+
 def get_month_minutes(month_offset=0):
     """Get total focus minutes for the current month.
 

@@ -28,6 +28,7 @@ if __name__ == "__main__":
         get_today_minutes,
         get_week_minutes,
         get_week_by_goal,
+        get_week_by_day,
         get_month_minutes,
         get_month_by_goal,
         DATA_DIR,
@@ -42,6 +43,7 @@ else:
         get_today_minutes,
         get_week_minutes,
         get_week_by_goal,
+        get_week_by_day,
         get_month_minutes,
         get_month_by_goal,
         DATA_DIR,
@@ -170,14 +172,25 @@ class FocusApp(rumps.App):
                 )
             )
 
-        # Add goal breakdown
-        goals = get_week_by_goal()
-        if goals:
+        # Add daily breakdown with goals
+        days = get_week_by_day()
+        if days:
             submenu.append(rumps.separator)
-            for goal, mins in goals.items():
-                submenu.append(
-                    rumps.MenuItem(f"{goal}: {mins}m", callback=self._do_nothing)
-                )
+            for day_info in days:
+                day_name = day_info["day_name"]
+                total = day_info["total"]
+                goals = day_info["goals"]
+
+                if total > 0:
+                    # Create day menu item with submenu for goals
+                    day_menu = rumps.MenuItem(f"{day_name}: {total}m", callback=self._do_nothing)
+                    if goals:
+                        for goal, mins in goals.items():
+                            if mins > 0:
+                                day_menu.add(rumps.MenuItem(f"{goal}: {mins}m", callback=self._do_nothing))
+                    submenu.append(day_menu)
+                else:
+                    submenu.append(rumps.MenuItem(f"{day_name}: -", callback=self._do_nothing))
 
         return submenu
 
