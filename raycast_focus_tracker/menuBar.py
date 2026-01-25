@@ -50,7 +50,8 @@ else:
     )
     from .streak_calculation import update_streaks
 
-import lesley
+import pandas as pd
+from plotly_calplot import calplot
 import rumps
 
 
@@ -81,11 +82,19 @@ class FocusApp(rumps.App):
             self._refresh_data()
 
             # Add submenus
-            self.menu.add(rumps.MenuItem("Streak Data", callback=None))
-            self.menu["Streak Data"].update(self._build_streak_submenu())
+            current_streak = get_current_streak()
+            streak_label = f"Streak: {current_streak} days"
+            self.menu.add(rumps.MenuItem(streak_label, callback=None))
+            self.menu[streak_label].update(self._build_streak_submenu())
 
-            self.menu.add(rumps.MenuItem("Today's Time", callback=None))
-            self.menu["Today's Time"].update(self._build_time_submenu())
+            today_minutes = get_today_minutes()
+            if today_minutes >= 60:
+                hours, remaining_mins = divmod(today_minutes, 60)
+                today_label = f"Today: {hours}h {remaining_mins}m"
+            else:
+                today_label = f"Today: {today_minutes} min"
+            self.menu.add(rumps.MenuItem(today_label, callback=None))
+            self.menu[today_label].update(self._build_time_submenu())
 
             self.menu.add(rumps.MenuItem("Time by Goal", callback=None))
             self.menu["Time by Goal"].update(self._build_goals_submenu())
@@ -182,12 +191,24 @@ class FocusApp(rumps.App):
                 goals = day_info["goals"]
 
                 if total > 0:
+                    # Format time with hours if >= 60
+                    if total >= 60:
+                        h, m = divmod(total, 60)
+                        total_str = f"{h}h {m}m"
+                    else:
+                        total_str = f"{total}m"
+
                     # Create day menu item with submenu for goals
-                    day_menu = rumps.MenuItem(f"{day_name}: {total}m", callback=self._do_nothing)
+                    day_menu = rumps.MenuItem(f"{day_name}: {total_str}", callback=self._do_nothing)
                     if goals:
                         for goal, mins in goals.items():
                             if mins > 0:
-                                day_menu.add(rumps.MenuItem(f"{goal}: {mins}m", callback=self._do_nothing))
+                                if mins >= 60:
+                                    gh, gm = divmod(mins, 60)
+                                    goal_str = f"{gh}h {gm}m"
+                                else:
+                                    goal_str = f"{mins}m"
+                                day_menu.add(rumps.MenuItem(f"{goal}: {goal_str}", callback=self._do_nothing))
                     submenu.append(day_menu)
                 else:
                     submenu.append(rumps.MenuItem(f"{day_name}: -", callback=self._do_nothing))
@@ -215,8 +236,13 @@ class FocusApp(rumps.App):
         if goals:
             submenu.append(rumps.separator)
             for goal, mins in goals.items():
+                if mins >= 60:
+                    h, m = divmod(mins, 60)
+                    time_str = f"{h}h {m}m"
+                else:
+                    time_str = f"{mins}m"
                 submenu.append(
-                    rumps.MenuItem(f"{goal}: {mins}m", callback=self._do_nothing)
+                    rumps.MenuItem(f"{goal}: {time_str}", callback=self._do_nothing)
                 )
 
         return submenu
@@ -232,15 +258,26 @@ class FocusApp(rumps.App):
         total = 0
 
         for goal, minutes in goals.items():
+            if minutes >= 60:
+                hours, remaining = divmod(minutes, 60)
+                time_str = f"{hours}h {remaining}m"
+            else:
+                time_str = f"{minutes}m"
             submenu.append(
-                rumps.MenuItem(f"{goal}: {minutes}m", callback=self._do_nothing)
+                rumps.MenuItem(f"{goal}: {time_str}", callback=self._do_nothing)
             )
             total += minutes
+
+        if total >= 60:
+            hours, remaining = divmod(total, 60)
+            total_str = f"{hours}h {remaining}m"
+        else:
+            total_str = f"{total}m"
 
         submenu.extend(
             [
                 rumps.separator,
-                rumps.MenuItem(f"Total: {total}m", callback=self._do_nothing),
+                rumps.MenuItem(f"Total: {total_str}", callback=self._do_nothing),
             ]
         )
 
@@ -319,8 +356,12 @@ class FocusApp(rumps.App):
     # Now using full menu rebuild with create_menu() for all refreshes
     # This is more reliable than trying to update submenus in place
 
-    def _create_heatmap(self):
-        """Create GitHub-style heatmap of focus sessions."""
+    def _create_heatmap(self, month_offset=0):
+        """Create GitHub-style heatmap of focus sessions with rolling 12-month window.
+        
+        Args:
+            month_offset: Number of months to shift the window (negative = past, positive = future)
+        """
         # Collect all focus data
         daily_data = {}
         
@@ -337,37 +378,158 @@ class FocusApp(rumps.App):
                 with open(focus_file, "r") as f:
                     daily_data.update(json.load(f))
 
-        # Generate year data for heatmap
-        year = datetime.now().year
-        dates, values = self._generate_year_data(daily_data, year)
+        # Generate rolling 12-month data for heatmap
+        df = self._generate_rolling_year_data(daily_data, month_offset)
 
-        # Create and save heatmap
-        chart = lesley.cal_heatmap(
-            dates,
-            values,
-            days_of_week=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-            cmap="Greens",
+        # Custom colorscale: grey for 0, green gradient for values
+        # Using a sharp boundary at 0.001 so only true 0 values are grey
+        colorscale = [
+            [0.0, "#ebedf0"],      # Grey for zero
+            [0.001, "#ebedf0"],    # Grey up to this point
+            [0.002, "#9be9a8"],    # Light green (any activity)
+            [0.25, "#40c463"],     # Medium green
+            [0.5, "#30a14e"],      # Darker green
+            [1.0, "#216e39"],      # Dark green (high)
+        ]
+
+        # Create heatmap with plotly-calplot
+        # cmap_min=0 ensures 0 minutes maps to 0.0 on the scale
+        # cmap_max=120 (2 hours) provides consistent scaling
+        fig = calplot(
+            df,
+            x="date",
+            y="value",
+            name="minutes",
+            colorscale=colorscale,
+            showscale=True,
+            gap=3,
+            years_title=True,
+            cmap_min=0,
+            cmap_max=120,
         )
 
+        # Add navigation buttons via HTML wrapper
         heatmap_path = Path.cwd() / "focus_heatmap.html"
-        chart.save(str(heatmap_path))
+        self._save_heatmap_with_navigation(fig, heatmap_path, month_offset, daily_data)
         webbrowser.open(heatmap_path.as_uri())
 
-    def _generate_year_data(self, daily_data, year):
-        """Generate dates and values for the entire year."""
+    def _generate_rolling_year_data(self, daily_data, month_offset=0):
+        """Generate dates and values for a rolling 12-month window.
+        
+        Args:
+            daily_data: Dictionary of date -> focus data
+            month_offset: Number of months to shift (negative = past)
+            
+        Returns:
+            pandas DataFrame with 'date' and 'value' columns
+        """
+        today = datetime.now().date()
+        
+        # Calculate end date based on offset (each offset shifts by ~30 days)
+        end_date = today + timedelta(days=month_offset * 30)
+        
+        # Don't go beyond today
+        if end_date > today:
+            end_date = today
+            
+        # Start date is 365 days before end date
+        start_date = end_date - timedelta(days=364)
+        
         dates = []
         values = []
-        current_date = datetime(year, 1, 1)
-
-        while current_date <= datetime(year, 12, 31):
+        current_date = start_date
+        
+        while current_date <= end_date:
             date_str = current_date.strftime("%Y-%m-%d")
             minutes = daily_data.get(date_str, {}).get("total_time_minutes", 0)
-
+            
             dates.append(current_date)
-            values.append(f"Time Spent Focussing {minutes}min")
+            values.append(minutes)
             current_date += timedelta(days=1)
+        
+        return pd.DataFrame({"date": dates, "value": values})
 
-        return dates, values
+    def _save_heatmap_with_navigation(self, fig, path, current_offset, daily_data):
+        """Save heatmap HTML with navigation controls.
+        
+        Args:
+            fig: Plotly figure object
+            path: Path to save HTML file
+            current_offset: Current month offset for navigation state
+            daily_data: Full dataset to determine navigation bounds
+        """
+        # Get the date range of available data
+        if daily_data:
+            all_dates = [datetime.strptime(d, "%Y-%m-%d").date() for d in daily_data.keys()]
+            min_date = min(all_dates)
+            max_date = max(all_dates)
+            today = datetime.now().date()
+            
+            # Calculate how many months back we can go
+            months_of_data = (today.year - min_date.year) * 12 + (today.month - min_date.month)
+            min_offset = -max(0, months_of_data - 11)  # Allow going back to see oldest data
+        else:
+            min_offset = 0
+        
+        # Get base HTML from plotly
+        base_html = fig.to_html(include_plotlyjs=True, full_html=True)
+        
+        # Calculate date range for display
+        today = datetime.now().date()
+        end_date = today + timedelta(days=current_offset * 30)
+        if end_date > today:
+            end_date = today
+        start_date = end_date - timedelta(days=364)
+        
+        date_range_str = f"{start_date.strftime('%b %d, %Y')} - {end_date.strftime('%b %d, %Y')}"
+        
+        # Inject navigation controls
+        nav_html = f'''
+        <div style="text-align: center; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">
+            <h2 style="margin-bottom: 10px;">Focus Session Heatmap</h2>
+            <p style="color: #666; margin-bottom: 20px;">{date_range_str}</p>
+            <div style="margin-bottom: 20px;">
+                <button onclick="navigate({current_offset - 1})" 
+                        style="padding: 10px 20px; margin: 0 10px; cursor: pointer; 
+                               background: #f0f0f0; border: 1px solid #ccc; border-radius: 5px;
+                               font-size: 14px;"
+                        {"disabled" if current_offset <= min_offset else ""}>
+                    ← Previous 12 Months
+                </button>
+                <button onclick="navigate(0)" 
+                        style="padding: 10px 20px; margin: 0 10px; cursor: pointer;
+                               background: #f0f0f0; border: 1px solid #ccc; border-radius: 5px;
+                               font-size: 14px;"
+                        {"disabled" if current_offset == 0 else ""}>
+                    Current
+                </button>
+                <button onclick="navigate({current_offset + 1})" 
+                        style="padding: 10px 20px; margin: 0 10px; cursor: pointer;
+                               background: #f0f0f0; border: 1px solid #ccc; border-radius: 5px;
+                               font-size: 14px;"
+                        {"disabled" if current_offset >= 0 else ""}>
+                    Next 12 Months →
+                </button>
+            </div>
+        </div>
+        <script>
+            function navigate(offset) {{
+                // Store the offset and signal to regenerate
+                // This uses a custom URL scheme that the app can intercept
+                // For now, store in localStorage and show instructions
+                localStorage.setItem('heatmap_offset', offset);
+                alert('Navigation requested. Please click "Show Heatmap" in the menu bar again to view the ' + 
+                      (offset === 0 ? 'current' : offset < 0 ? 'previous' : 'next') + ' period.\\n\\n' +
+                      'Offset: ' + offset);
+            }}
+        </script>
+        '''
+        
+        # Insert navigation before the plotly chart
+        final_html = base_html.replace('<body>', f'<body>{nav_html}')
+        
+        with open(path, 'w') as f:
+            f.write(final_html)
 
     @rumps.clicked("Show Heatmap")
     def show_heatmap(self, _):

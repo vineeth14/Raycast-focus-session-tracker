@@ -1,0 +1,43 @@
+[project]
+name = "raycast-focus-tracker"
+version = "1.0.0"
+description = "macOS menu bar app for tracking Raycast focus sessions"
+authors = [
+    { name = "Vineeth Rajesh" }
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "rumps>=0.4.0",
+    "lesley>=0.3.0",
+    "plotly-calplot>=0.1.20",
+    "pandas>=1.3.0",
+]
+
+[project.scripts]
+raycast-tracker = "raycast_focus_tracker.daemon_launcher:main"
+raycast-tracker-stop = "raycast_focus_tracker.stop_tracker:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["raycast_focus_tracker"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"raycast_focus_tracker/focus-tracker.sh" = "bin/focus-tracker.sh"
+"raycast_focus_tracker/stop-tracker.sh" = "bin/stop-tracker.sh"
+"raycast_focus_tracker/start-daemon.sh" = "bin/start-daemon.sh"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"

@@ -22,8 +22,8 @@ set -euo pipefail
 # Get the directory where the script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Check if running in development environment (by checking for setup.py)
-if [ -f "$SCRIPT_DIR/../setup.py" ]; then
+# Check if running in development environment (by checking for setup.py or pyproject.toml)
+if [ -f "$SCRIPT_DIR/../setup.py" ] || [ -f "$SCRIPT_DIR/../pyproject.toml" ]; then
     # Development mode: use local directories relative to the script
     BASE_DIR="$SCRIPT_DIR/.."
     echo "Running in development mode."
