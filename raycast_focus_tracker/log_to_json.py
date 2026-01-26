@@ -17,7 +17,15 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-STATE_FILE = Path.home() / ".raycast-focus-tracker" / ".parser_state.json"
+# Detect dev mode same way as focus-tracker.sh and data_access.py
+SCRIPT_DIR = Path(__file__).parent
+project_root = SCRIPT_DIR.parent
+IS_DEV_MODE = (project_root / "pyproject.toml").exists() or (project_root / "setup.py").exists()
+
+if IS_DEV_MODE:
+    STATE_FILE = project_root / ".parser_state.json"
+else:
+    STATE_FILE = Path.home() / ".raycast-focus-tracker" / ".parser_state.json"
 
 
 
@@ -224,7 +232,7 @@ def handle_session_start(line, data, current_session_data):
 
 def extract_goal(line, current_session_data):
     """Extract goal from 'Goal: ...' line.
-    
+
     Args:
         line (str): Log line containing goal information
         current_session_data (dict): Tracking data for current session

@@ -287,18 +287,16 @@ class FocusApp(rumps.App):
         """Parse newly captured Raycast focus logs from file logging and update focus data."""
         try:
             # Parse newly captured logs from the focus-tracker.sh log stream
-            # Search both project and home directories for log files
-            project_log_dir = self.script_dir.parent / "logs"
-            home_log_dir = Path.home() / ".raycast-focus-tracker" / "logs"
-            log_files = []
+            # Use consistent dev mode detection - only read from ONE directory
+            project_root = self.script_dir.parent
+            is_dev_mode = (project_root / "pyproject.toml").exists() or (project_root / "setup.py").exists()
 
-            # Check project directory (development mode)
-            if project_log_dir.exists():
-                log_files.extend(list(project_log_dir.glob("focus.*.log")))
+            if is_dev_mode:
+                log_dir = project_root / "logs"
+            else:
+                log_dir = Path.home() / ".raycast-focus-tracker" / "logs"
 
-            # Check home directory (installed mode)
-            if home_log_dir.exists():
-                log_files.extend(list(home_log_dir.glob("focus.*.log")))
+            log_files = list(log_dir.glob("focus.*.log")) if log_dir.exists() else []
 
             # Always output to the primary data directory
             output_dir = self.data_dir
