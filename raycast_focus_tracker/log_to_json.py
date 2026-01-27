@@ -454,7 +454,7 @@ def _complete_session(session, timestamp, line):
     if session.get('state') != 'completed':
         session.update({
             'end_time': timestamp,
-            'cancelled': "Cancel" in line,
+            'cancelled': "Complete" not in line,
             'actual_duration': calculate_duration(session['start_time'], timestamp),
             'pauses': 0,
             'blocks': 0,
@@ -481,11 +481,7 @@ def _handle_duration(line, data, current_session_data):
 
 def _handle_count_stat(line, data, current_session_data, stat_name):
     """Handle count statistics from activity summary."""
-    pattern = f"{stat_name.title().replace('s', 'es')} Count: (\\d+)"
-    if stat_name == 'pauses':
-        pattern = "Pauses Count: (\\d+)"
-    
-    match = re.search(pattern, line)
+    match = re.search(r'Count:\s*(\d+)', line)
     if match:
         update_last_session_stat(data, current_session_data, stat_name, int(match.group(1)))
 
@@ -720,6 +716,7 @@ def _process_log_line(line, data, current_session_data):
             "Goal:": _handle_goal_line,
             "Complete focus session": handle_session_end,
             "Cancel focus session": handle_session_end,
+            "Stop focus session": handle_session_end,
             "Focus session activity summary": _handle_activity_summary_start,
             "Restoring stored form state": _handle_form_state_reset
         }

@@ -188,13 +188,13 @@ class TestCompleteWorkflow:
         
         # Test 3: Missing data directory
         missing_dir = temp_data_dir / "nonexistent"
-        
-        with patch_data_dir(missing_dir):
-            from raycast_focus_tracker.data_access import get_today_minutes, get_today_by_goal
-            
-            # Should not crash and should return default values
-            assert get_today_minutes() == 0
-            assert get_today_by_goal() == {}
+
+        from raycast_focus_tracker.data_access import get_today_minutes, get_today_by_goal
+
+        # Should not crash and should return default values
+        # Use search_dirs to isolate from real data on disk
+        assert get_today_minutes(search_dirs=[missing_dir]) == 0
+        assert get_today_by_goal(search_dirs=[missing_dir]) == {}
 
     def test_concurrent_session_workflow(self, temp_data_dir):
         """Test handling of concurrent or overlapping sessions."""
@@ -298,28 +298,28 @@ class TestCompleteWorkflow:
         assert streaks["longest_streak"] == 100
         
         # Test data access with large dataset
-        # Create JSON file with all data
-        large_json = temp_data_dir / "large_focus.json"
+        # Create JSON file with all data (name must match focus.*.json glob)
+        large_json = temp_data_dir / "focus.large.json"
         with open(large_json, 'w') as f:
             json.dump(large_data, f)
-        
-        with patch_data_dir(temp_data_dir):
-            from raycast_focus_tracker.data_access import get_today_minutes, get_today_by_goal
-            
-            # Should still work efficiently
-            start_time = time.time()
-            minutes = get_today_minutes()
-            goals = get_today_by_goal()
-            end_time = time.time()
-            
-            # Should complete quickly
-            assert end_time - start_time < 0.1
-            
-            # Should return today's data correctly
-            today = datetime.now().strftime("%Y-%m-%d")
-            if today in large_data:
-                assert minutes == large_data[today]["total_time_minutes"]
-                assert goals == large_data[today]["time_per_goal"]
+
+        from raycast_focus_tracker.data_access import get_today_minutes, get_today_by_goal
+
+        # Should still work efficiently
+        # Use search_dirs to isolate from real data on disk
+        start_time = time.time()
+        minutes = get_today_minutes(search_dirs=[temp_data_dir])
+        goals = get_today_by_goal(search_dirs=[temp_data_dir])
+        end_time = time.time()
+
+        # Should complete quickly
+        assert end_time - start_time < 0.1
+
+        # Should return today's data correctly
+        today = datetime.now().strftime("%Y-%m-%d")
+        if today in large_data:
+            assert minutes == large_data[today]["total_time_minutes"]
+            assert goals == large_data[today]["time_per_goal"]
 
     def test_data_migration_workflow(self, temp_data_dir):
         """Test migration between different data formats or structures."""

@@ -102,23 +102,26 @@ def get_longest_streak():
     return _get_streak_value("longest_streak")
 
 
-def get_today_by_goal():
+def get_today_by_goal(search_dirs=None):
     """Get today's time breakdown by goal/category.
-    
+
+    Args:
+        search_dirs (list, optional): List of directories to search. Defaults to None.
+
     Returns:
         dict: Mapping of goal names to minutes spent, empty if no data or error.
     """
     today = datetime.now().strftime("%Y-%m-%d")
-    
-    try:
-        # Check both home and project directories for today's data
+
+    if search_dirs is None:
         search_dirs = [
             DATA_DIR,
             Path(__file__).parent.parent / "data",  # Project data directory
             Path.home() / ".raycast-focus-tracker" / "data",  # Home directory
             Path(__file__).parent / "data"  # Package data directory
         ]
-        
+
+    try:
         for data_dir in search_dirs:
             if not data_dir.exists():
                 continue
@@ -132,7 +135,7 @@ def get_today_by_goal():
                     continue  # Skip invalid files
     except Exception as e:
         print(f"Error accessing today's goals: {e}")
-    
+
     return {}
 
 
